@@ -1,0 +1,26 @@
+# MicroFi partition table for the 16 MB Lonely Binary ESP32-S3 N16R8.
+#
+# Layout sized for a "30-day default offline durability" promise with OTA
+# preserved:
+#
+#   bootloader       ~32 KB   (placed at 0x1000 by ESP-IDF, not in this table)
+#   partition table   4 KB    (this file's compiled form, at 0x8000)
+#   nvs               24 KB   key/value config (agent ID, calibration, etc.)
+#   otadata            8 KB   OTA slot pointer
+#   phy_init           4 KB   RF calibration data
+#   ota_0           2048 KB   application slot A
+#   ota_1           2048 KB   application slot B (for OTA rollback)
+#   littlefs       ~11.5 MB   FlowFile + Content repositories (durable queue)
+#
+# To extend the durability window beyond ~30 days, enable
+# CONFIG_MICROFI_SD_OVERFLOW in menuconfig and wire an SD card breakout to
+# the configured SPI pins. The SD card extends storage *without* changing
+# this partition table.
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+otadata,    data, ota,      0xf000,    0x2000,
+phy_init,   data, phy,      0x11000,   0x1000,
+ota_0,      app,  ota_0,    0x20000,   0x200000,
+ota_1,      app,  ota_1,    0x220000,  0x200000,
+littlefs,   data, spiffs,   0x420000,  0xBE0000,

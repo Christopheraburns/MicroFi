@@ -32,6 +32,8 @@ idf_component_register(
     "agent_id.cpp"
     "manifest.cpp"
     "c2_client.cpp"
+    "storage.cpp"
+    "littlefs_repository.cpp"
     "main.cpp"
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
@@ -50,11 +52,8 @@ idf_component_register(
     esp-tls
     freertos
     log
+    esp_littlefs
   WHOLE_ARCHIVE
 )
 
 target_compile_definitions(
-  ${COMPONENT_LIB}
-  PRIVATE
-    CJSON_NESTING_LIMIT=1000
-    CJ

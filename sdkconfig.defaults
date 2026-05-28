@@ -17,24 +17,22 @@ CONFIG_MICROFI_AGENT_CLASS="default"
 CONFIG_MICROFI_AGENT_ID=""
 CONFIG_MICROFI_HEARTBEAT_INTERVAL_MS=30000
 
-# --- C++ standard library ----------------------------------------------------
-# We compile our own translation units with -fno-exceptions -fno-rtti via the
-# cxx_cpp_std.py pre-script. Keep the toolchain libstdc++ honest too.
-CONFIG_COMPILER_CXX_EXCEPTIONS=n
-CONFIG_COMPILER_CXX_RTTI=n
+# --- MicroFi storage ---------------------------------------------------------
+# Defaults match the "30-day offline durability" target on the 16 MB Lonely
+# Binary S3 with the partitions.csv shipped in the repo. Watermarks are
+# tuned to keep LittleFS in the predictable-performance band; adjust via
+# menuconfig if you want a different durability vs. performance trade.
 
-# --- mbedTLS -----------------------------------------------------------------
-# Trust the ESP-IDF default certificate bundle. Used when the heartbeat URL
-# is HTTPS; harmless when it's plain HTTP.
-CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
-CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+CONFIG_MICROFI_LITTLEFS_PARTITION_LABEL="littlefs"
+CONFIG_MICROFI_LITTLEFS_FORMAT_ON_MOUNT_FAIL=y
+CONFIG_MICROFI_LITTLEFS_HIGH_WATER_PCT=80
+CONFIG_MICROFI_LITTLEFS_LOW_WATER_PCT=70
+CONFIG_MICROFI_SD_OVERFLOW=n
+CONFIG_MICROFI_RETENTION_DROP_OLDEST=y
+CONFIG_MICROFI_EVICTION_BATCH_HINT=0
+CONFIG_MICROFI_STORAGE_METRICS=y
 
-# Shrink the mbedTLS RAM footprint a little.
-CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
-CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=8192
-
-# --- FreeRTOS ----------------------------------------------------------------
-CONFIG_FREERTOS_HZ=1000
-
-# --- Logging -----------------------------------------------------------------
-CONFIG_LOG_DEF
+# --- esp_littlefs component --------------------------------------------------
+# Enable the upstream esp_littlefs IDF component. Without this the storage
+# subsystem can't mount.
+CONFIG_LITTLEFS_EN

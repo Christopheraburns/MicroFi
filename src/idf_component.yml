@@ -1,0 +1,16 @@
+## MicroFi main component dependency manifest.
+##
+## This file is read by the ESP-IDF Component Manager during the first build.
+## Dependencies declared here are downloaded into `managed_components/` at the
+## project root (which is gitignored) and built as part of the firmware.
+
+dependencies:
+  ## LittleFS port for ESP-IDF (joltwallet). Provides:
+  ##   - esp_vfs_littlefs_register / unregister
+  ##   - esp_littlefs_info / format
+  ##   - the CONFIG_LITTLEFS_* Kconfig tree
+  joltwallet/littlefs: "^1.14.0"
+
+  ## Required by the IDF Component Manager itself.
+  idf:
+    version: ">=5.0"

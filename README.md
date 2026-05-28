@@ -16,7 +16,10 @@ Pre-alpha. First slice scope:
 - [x] Two embedded processors: `GenerateFlowFile`, `LogAttribute`.
 - [x] Flow-definition parsing — NiFi versioned-flow-snapshot (JSON) with auto-detect fall-through to MiNiFi Config Version 3 (YAML).
 - [x] C2 operation dispatch — `DESCRIBE/manifest` re-send and `UPDATE/configuration` fetch + parse + engine apply. EFM 2.x ack is delivered implicitly via the next heartbeat's `flowInfo.flowId`.
-- [ ] Durable repositories on LittleFS (later).
+- [x] Durable storage substrate — LittleFS mount, `IRepository` interface, `LittleFSRepository` with watermark eviction (DropOldest / BackPressure / FailWrites), storage metrics in the EFM heartbeat. Default partition layout in `partitions.csv` sizes for ~30 days offline.
+- [ ] Engine queue integration — replay queued FlowFiles on boot, persist on enqueue, erase on successful ack.
+- [ ] SD card overflow tier — Kconfig surface is in place (`MICROFI_SD_OVERFLOW`); `SdRepository` / `TieredRepository` implementations are Phase 2.
+- [ ] Per-flow retention policy override — read connection-level retention settings from the EFM flow definition and apply per-connection.
 
 ## Layout
 
@@ -30,6 +33,7 @@ scripts/                Dev-loop helpers (PowerShell + bash; see scripts/secrets
 docs/                   Design rationale, processor inventory, demo-kit architecture.
 sdkconfig.defaults      ESP-IDF defaults committed to the repo.
 platformio.ini          PlatformIO build environments (esp32s3 default, esp32-c3 for size checks).
+partitions.csv          Custom partition table — OTA + ~12 MB LittleFS for durable storage.
 ```
 
 ## Building
@@ -62,15 +66,7 @@ Edit `sdkconfig.defaults` (or `pio run -t menuconfig` → "MicroFi configuration
 - `CONFIG_MICROFI_AGENT_ID` — leave empty to derive `microfi-<mac>` from the eFuse MAC, or set a fixed override.
 - `CONFIG_MICROFI_HEARTBEAT_INTERVAL_MS` — defaults to 30000.
 
-## Connecting to a Cloudera EFM server
+Storage layer settings (under the "MicroFi storage" menu):
 
-The agent sends a MiNiFi C2 protocol heartbeat (EFM 2.x envelope) to `CONFIG_MICROFI_C2_HEARTBEAT_URL`. The first heartbeat carries the full agent manifest derived from the static processor registry; subsequent heartbeats send only the manifest hash.
-
-Operations sent back from EFM in the heartbeat response are dispatched immediately:
-
-- **`DESCRIBE / manifest`** — flips an internal flag so the next heartbeat re-includes the full manifest.
-- **`UPDATE / configuration`** — resolves the flow-definition URL from `args.location` → `args.flowUrl` → `args.configuration` → `args.url`, falling back to a constructed `configContent/<op-id>` URL if none are present. The body is fetched, format-detected (NiFi versioned-flow-snapshot JSON or MiNiFi Config Version 3 YAML), parsed into a `FlowDef`, and applied to the running flow engine. The flow UUID is recovered from the URL when the payload doesn't carry one explicitly.
-
-No explicit POST to `CONFIG_MICROFI_C2_ACK_URL` is issued — EFM 2.x considers the operation acknowledged when the next heartbeat advertises a `flowInfo.flowId` matching the pushed flow UUID.
-
-Reachability: **`localhost` in t
+- `CONFIG_MICROFI_LITTLEFS_HIGH_WATER_PCT` / `CONFIG_MICROFI_LITTLEFS_LOW_WATER_PCT` — eviction watermarks for the durable queue. Defaults 80/70 keep writes in the predictable-performance band.
+- `CONFIG_MICROFI_RETENTION_DROP_OLDEST` / `..._BACK_PRESSURE` / `..._FAIL_WRITES` — default retention policy for new connections. `DropOldest` is the right answer for sensor-fed flows (the source can't pause); `Bac

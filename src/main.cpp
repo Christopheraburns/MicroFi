@@ -14,6 +14,7 @@
 #include "microfi/flow_engine.h"
 #include "microfi/manifest.h"
 #include "microfi/registry.h"
+#include "microfi/storage.h"
 #include "microfi/types.h"
 #include "microfi/wifi.h"
 
@@ -32,6 +33,16 @@ extern "C" void app_main(void) {
     if (microfi::manifest_init() != microfi::Status::Ok) {
         ESP_LOGE(TAG, "manifest init failed");
         return;
+    }
+
+    // Storage subsystem: mount LittleFS so the engine has a durable
+    // repository available. Non-fatal on failure -- the agent continues in
+    // volatile-only mode (FlowFiles will not survive reboot) and the
+    // condition is loud-logged for diagnosis.
+    const microfi::Status storage_rc = microfi::storage_init();
+    if (storage_rc != microfi::Status::Ok) {
+        ESP_LOGW(TAG, "storage init failed: %s -- volatile-only mode",
+                 microfi::to_string(storage_rc));
     }
 
     auto& reg = microfi::Registry::instance();
@@ -53,20 +64,4 @@ extern "C" void app_main(void) {
                  microfi::to_string(wifi_rc));
     }
 
-    const microfi::Status engine_rc = microfi::FlowEngine::instance().start();
-    if (engine_rc != microfi::Status::Ok) {
-        ESP_LOGE(TAG, "engine failed to start: %s",
-                 microfi::to_string(engine_rc));
-        return;
-    }
-
-    const microfi::Status c2_rc = microfi::c2_client_start();
-    if (c2_rc != microfi::Status::Ok) {
-        ESP_LOGE(TAG, "c2 client failed to start: %s",
-                 microfi::to_string(c2_rc));
-        return;
-    }
-
-    ESP_LOGI(TAG, "boot complete; heartbeating to %s",
-             CONFIG_MICROFI_C2_HEARTBEAT_URL);
-}
+    const microfi::Status engine_rc = microfi::F

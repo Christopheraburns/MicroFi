@@ -28,6 +28,7 @@
 #include "microfi/flow_parser.h"
 #include "microfi/manifest.h"
 #include "microfi/registry.h"
+#include "microfi/storage.h"
 #include "microfi/wifi.h"
 
 #include "cJSON.h"
@@ -208,6 +209,34 @@ cJSON* build_agent_info(bool include_manifest) {
                             static_cast<double>(engine.flowfiles_produced()));
     cJSON_AddNumberToObject(mf, "consumed",
                             static_cast<double>(engine.flowfiles_consumed()));
+
+#if defined(CONFIG_MICROFI_STORAGE_METRICS)
+    // Durable-storage metrics. Reported as 0/0 (with fill_percent=0) when
+    // the repository failed to mount; the agent stays operational in
+    // volatile-only mode but operators can see the failure via the
+    // capacity_bytes=0 sentinel.
+    IRepository* repo = repository();
+    if (repo != nullptr) {
+        const RepositoryStats st = repo->stats();
+        cJSON_AddNumberToObject(mf, "littleFsUsedBytes",
+                                static_cast<double>(st.used_bytes));
+        cJSON_AddNumberToObject(mf, "littleFsCapacityBytes",
+                                static_cast<double>(st.capacity_bytes));
+        cJSON_AddNumberToObject(mf, "littleFsFillPercent",
+                                static_cast<double>(st.fill_percent));
+        cJSON_AddNumberToObject(mf, "evictionCount",
+                                static_cast<double>(st.eviction_count));
+        cJSON_AddNumberToObject(mf, "failedWrites",
+                                static_cast<double>(st.failed_writes));
+        cJSON_AddNumberToObject(mf, "storedRecords",
+                                static_cast<double>(st.record_count));
+    } else {
+        cJSON_AddNumberToObject(mf, "littleFsUsedBytes",     0);
+        cJSON_AddNumberToObject(mf, "littleFsCapacityBytes", 0);
+        cJSON_AddStringToObject(mf, "storageStatus",         "unmounted");
+    }
+#endif
+
     cJSON_AddItemToObject(status, "microfi", mf);
 
     cJSON_AddItemToObject(ai, "status", status);
@@ -420,37 +449,4 @@ void resolve_config_url(cJSON* op, char* out, size_t out_size) {
                 std::strncpy(out, url, out_size - 1);
                 out[out_size - 1] = '\0';
                 return;
-            }
-        }
-        ESP_LOGW(TAG, "  no recognised URL key in args; falling back to constructed URL");
-    } else {
-        ESP_LOGW(TAG, "  UPDATE op has no 'args'; falling back to constructed URL");
-    }
-
-    const char* op_id = cJSON_GetStringValue(
-        cJSON_GetObjectItem(op, "identifier"));
-    if (op_id == nullptr || op_id[0] == '\0') {
-        ESP_LOGE(TAG, "  op has no identifier; cannot resolve config URL");
-        return;
-    }
-    build_config_content_url(out, out_size, op_id);
-    ESP_LOGW(TAG, "  constructed fallback configContent URL: %s", out);
-}
-
-// Scan `url` left-to-right for the first UUID-shaped token
-// (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx, 36 chars).
-// Writes into dst[0..36] and returns true when found.
-// Used to recover the flow UUID from the EFM flows/ URL when the payload
-// format (MiNiFi YAML v3) doesn't carry an explicit flow identifier.
-static bool extract_uuid_from_url(const char* url, char* dst, size_t dst_size) {
-    if (dst_size < 37) return false;
-    static const int kDashPos[] = {8, 13, 18, 23, -1};
-    for (const char* p = url; *p != '\0'; ++p) {
-        // Fast pre-screen: dashes must be at positions 8, 13, 18, 23.
-        if (p[8]  != '-') continue;
-        if (p[13] != '-') { p += 8;  continue; }
-        if (p[18] != '-') { p += 13; continue; }
-        if (p[23] != '-') { p += 18; continue; }
-
-        bool ok = true;
-        for (int i = 0; i < 36 && ok; +
+       
