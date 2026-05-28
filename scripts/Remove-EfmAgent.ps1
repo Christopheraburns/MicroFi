@@ -17,10 +17,4 @@ if (-not (Test-Path $secretsFile)) {
 }
 . $secretsFile
 
-Write-Host "Deleting agent '$AgentId'..."
-Invoke-RestMethod -Method DELETE -Uri "$EfmBaseUrl/agents/$AgentId"
-Write-Host "Agent '$AgentId' deleted."
-
-Write-Host "Deleting agent class '$AgentClass'..."
-Invoke-RestMethod -Method DELETE -Uri "$EfmBaseUrl/agent-classes/$AgentClass"
-Write-Host "Agent class '$AgentClass' deleted."
+Write-Host "

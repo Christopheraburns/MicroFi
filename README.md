@@ -73,13 +73,4 @@ Operations sent back from EFM in the heartbeat response are dispatched immediate
 
 No explicit POST to `CONFIG_MICROFI_C2_ACK_URL` is issued — EFM 2.x considers the operation acknowledged when the next heartbeat advertises a `flowInfo.flowId` matching the pushed flow UUID.
 
-Reachability: **`localhost` in the default URL won't work from a real ESP32** — to the device, `localhost` is itself, not your dev box. Two paths to a reachable EFM:
-
-1. **EFM on your LAN.** Set `CONFIG_MICROFI_C2_HEARTBEAT_URL` to `http://<efm-host-lan-ip>:10090/efm/api/c2-protocol/heartbeat` and make sure EFM is bound to `0.0.0.0:10090` (or that LAN IP) rather than `127.0.0.1`.
-2. **EFM behind a tunnel.** Run `ngrok http 10090` (or cloudflared, tailscale-funnel) on the EFM host and put the resulting public URL in the heartbeat setting.
-
-Once the heartbeat reaches EFM the agent auto-registers and appears in the EFM UI under the configured agent class.
-
-## Next steps
-
-See [`docs/Processor-Inventory-And-Roadmap.md`](docs/Processor-Inventory-And-Roadmap.md) for the first batch of Physical-AI-fabric. 
+Reachability: **`localhost` in t

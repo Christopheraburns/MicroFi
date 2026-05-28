@@ -95,14 +95,4 @@ struct ProcessorDescriptor {
     const char* input_requirement;
 
     // Optional property declarations, serialized into the C2 manifest so EFM
-    // can render them in the Flow Designer. Null / 0 means no properties
-    // (manifest omits the propertyDescriptors key entirely, avoiding the
-    // empty-object serialization bug in EFM's Java deserializer).
-    //
-    // These fields are at the END of the struct so that existing aggregate
-    // initializers that don't mention them are zero-initialized safely.
-    const PropertyDescriptor* properties;
-    size_t                    property_count;
-};
-
-}  // namespace microfi
+    // can render them in the Flow Designe

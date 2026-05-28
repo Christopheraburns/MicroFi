@@ -57,5 +57,4 @@ target_compile_definitions(
   ${COMPONENT_LIB}
   PRIVATE
     CJSON_NESTING_LIMIT=1000
-    CJSON_CIRCULAR_LIMIT=10000
-)
+    CJ

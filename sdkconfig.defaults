@@ -37,4 +37,4 @@ CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=8192
 CONFIG_FREERTOS_HZ=1000
 
 # --- Logging -----------------------------------------------------------------
-CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_DEF

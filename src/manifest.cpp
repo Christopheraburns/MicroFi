@@ -324,3 +324,4 @@ size_t      manifest_json_len() { return s_manifest_json_len; }
 const char* manifest_hash()     { return s_manifest_hash; }
 
 }  // namespace microfi
+                                                                                                                                                     
