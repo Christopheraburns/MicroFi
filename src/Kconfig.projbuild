@@ -1,0 +1,56 @@
+menu "MicroFi configuration"
+
+config MICROFI_WIFI_SSID
+    string "WiFi SSID"
+    default "<your-wifi-ssid>"
+    help
+        SSID the agent joins on boot. Override per environment via
+        sdkconfig.defaults or menuconfig.
+
+config MICROFI_WIFI_PASSWORD
+    string "WiFi password"
+    default ""
+    help
+        WPA2 passphrase. Leave blank for an open network.
+
+config MICROFI_C2_HEARTBEAT_URL
+    string "EFM / C2 heartbeat URL"
+    default "http://localhost:10090/efm/api/c2-protocol/heartbeat"
+    help
+        Full URL where MicroFi POSTs heartbeats. For Cloudera EFM 2.x the
+        path is /efm/api/c2-protocol/heartbeat. The 'localhost' default is
+        only correct when MicroFi runs on the same host as EFM (rare);
+        normally set this to the LAN IP or hostname of the EFM host.
+
+config MICROFI_C2_ACK_URL
+    string "EFM / C2 acknowledge URL"
+    default "http://localhost:10090/efm/api/c2-protocol/acknowledge"
+    help
+        Full URL where MicroFi POSTs operation acknowledgements. Not used by
+        the current slice (operations are logged, not acked) but the field
+        is configurable so the next slice can pick it up unchanged.
+
+config MICROFI_AGENT_CLASS
+    string "Agent class"
+    default "default"
+    help
+        Reported under agentInfo.agentClass. EFM groups agents by class and
+        applies class-level flow definitions to all members of the class.
+
+config MICROFI_AGENT_ID
+    string "Agent identifier override"
+    default ""
+    help
+        Reported under agentInfo.identifier. Leave blank to derive the id
+        from the eFuse MAC ("microfi-aabbccddeeff"); set to a fixed string
+        for stable dev-only ids.
+
+config MICROFI_HEARTBEAT_INTERVAL_MS
+    int "Heartbeat interval (ms)"
+    default 30000
+    range 1000 3600000
+    help
+        How often the C2 client POSTs a heartbeat. 30000 (30s) is a sane
+        default for development; production fleets typically use 60000+.
+
+endmenu
