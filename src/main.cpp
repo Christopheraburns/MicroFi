@@ -64,4 +64,20 @@ extern "C" void app_main(void) {
                  microfi::to_string(wifi_rc));
     }
 
-    const microfi::Status engine_rc = microfi::F
+    const microfi::Status engine_rc = microfi::FlowEngine::instance().start();
+    if (engine_rc != microfi::Status::Ok) {
+        ESP_LOGE(TAG, "engine failed to start: %s",
+                 microfi::to_string(engine_rc));
+        return;
+    }
+
+    const microfi::Status c2_rc = microfi::c2_client_start();
+    if (c2_rc != microfi::Status::Ok) {
+        ESP_LOGE(TAG, "c2 client failed to start: %s",
+                 microfi::to_string(c2_rc));
+        return;
+    }
+
+    ESP_LOGI(TAG, "boot complete; heartbeating to %s",
+             CONFIG_MICROFI_C2_HEARTBEAT_URL);
+}

@@ -35,4 +35,26 @@ CONFIG_MICROFI_STORAGE_METRICS=y
 # --- esp_littlefs component --------------------------------------------------
 # Enable the upstream esp_littlefs IDF component. Without this the storage
 # subsystem can't mount.
-CONFIG_LITTLEFS_EN
+CONFIG_LITTLEFS_ENABLE=y
+
+# --- C++ standard library ----------------------------------------------------
+# We compile our own translation units with -fno-exceptions -fno-rtti via the
+# cxx_cpp_std.py pre-script. Keep the toolchain libstdc++ honest too.
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# --- mbedTLS -----------------------------------------------------------------
+# Trust the ESP-IDF default certificate bundle. Used when the heartbeat URL
+# is HTTPS; harmless when it's plain HTTP.
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+
+# Shrink the mbedTLS RAM footprint a little.
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=8192
+
+# --- FreeRTOS ----------------------------------------------------------------
+CONFIG_FREERTOS_HZ=1000
+
+# --- Logging -----------------------------------------------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

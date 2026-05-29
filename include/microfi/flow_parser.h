@@ -27,4 +27,11 @@ namespace microfi {
 //   '{' first character              → NiFi versioned-flow-snapshot JSON
 //
 // Returns Status::Ok on success, Status::ParseError on failure.
-// On ParseEr
+// On ParseError, `out` is in an indeterminate state and must not be used.
+Status flow_parse(const char* body, FlowDef& out);
+
+// Parse a MiNiFi Config Version 3 YAML body into `out`.
+// Called automatically by flow_parse(); also callable directly for testing.
+Status flow_yaml_parse(const char* yaml, FlowDef& out);
+
+}  // namespace microfi

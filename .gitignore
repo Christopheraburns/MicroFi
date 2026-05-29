@@ -20,4 +20,10 @@ dependencies.lock
 managed_components/
 
 # OS
-.DS_Stor
+.DS_Store
+Thumbs.db
+
+# Editors
+*.swp
+*~
+

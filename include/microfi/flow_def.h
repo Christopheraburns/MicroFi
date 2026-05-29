@@ -47,4 +47,20 @@ struct FlowNode {
 //   src_id / dst_id   -- match FlowNode.id in the same FlowDef
 //   relationship      -- e.g. "success", "failure"
 struct FlowConnection {
-    char id[37];              // connection UUID (YAML `id:` field
+    char id[37];              // connection UUID (YAML `id:` field)
+    char name[64];            // human label     (YAML `name:` field)
+    char src_id[37];
+    char dst_id[37];
+    char relationship[32];
+};
+
+// A fully parsed flow definition ready to hand to FlowEngine::apply().
+struct FlowDef {
+    char           flow_id[37];                        // flow UUID or all-zeros
+    FlowNode       nodes[kMaxFlowNodes];
+    size_t         node_count;
+    FlowConnection connections[kMaxFlowConnections];
+    size_t         connection_count;
+};
+
+}  // namespace microfi

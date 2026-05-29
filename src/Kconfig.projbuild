@@ -60,3 +60,146 @@ menu "MicroFi storage"
 # ---- Internal flash (LittleFS) repository -----------------------------------
 
 config MICROFI_LITTLEFS_PARTITION_LABEL
+    string "LittleFS partition label"
+    default "littlefs"
+    help
+        Must match a partition entry in partitions.csv with subtype `spiffs`
+        (the SPIFFS subtype is reused for LittleFS - a naming wart in
+        ESP-IDF's partition format).
+
+config MICROFI_LITTLEFS_FORMAT_ON_MOUNT_FAIL
+    bool "Format LittleFS partition if mount fails"
+    default y
+    help
+        On first boot the partition is empty and mount will fail. Leave
+        enabled unless you want to debug filesystem corruption rather
+        than transparently recover.
+
+config MICROFI_LITTLEFS_HIGH_WATER_PCT
+    int "Eviction high watermark (%)"
+    default 80
+    range 50 95
+    help
+        When repository usage crosses this percentage, the retention policy
+        begins evicting (DropOldest) or pausing upstream (BackPressure).
+        80 is the recommended default - LittleFS write latency starts
+        climbing meaningfully above this threshold.
+
+config MICROFI_LITTLEFS_LOW_WATER_PCT
+    int "Eviction low watermark (%)"
+    default 70
+    range 30 90
+    help
+        Eviction continues until usage drops below this percentage. The
+        gap between low and high watermarks is what amortizes eviction
+        cost - set them too close and the system thrashes at the boundary.
+
+# ---- SD card overflow tier (optional - stub for now) ------------------------
+
+config MICROFI_SD_OVERFLOW
+    bool "Enable SD card as overflow tier"
+    default n
+    help
+        When enabled, the repository becomes tiered: LittleFS holds the
+        recent durable tip, an SD card holds older data migrated out of
+        LittleFS. The SdRepository implementation is a Phase 2 deliverable
+        - the Kconfig is in place so the API can be reserved, but enabling
+        this flag today logs a warning and falls back to LittleFS-only.
+
+if MICROFI_SD_OVERFLOW
+
+    choice
+        prompt "SD card interface mode"
+        default MICROFI_SD_BUS_SPI
+
+        config MICROFI_SD_BUS_SPI
+            bool "SPI (SDSPI mode)"
+
+        config MICROFI_SD_BUS_SDMMC
+            bool "SDMMC (1-bit or 4-bit)"
+    endchoice
+
+    config MICROFI_SD_GPIO_CLK
+        int "SD CLK GPIO"
+        default 36
+
+    config MICROFI_SD_GPIO_MISO
+        int "SD MISO / DAT0 GPIO"
+        default 37
+
+    config MICROFI_SD_GPIO_MOSI
+        int "SD MOSI / CMD GPIO"
+        default 35
+
+    config MICROFI_SD_GPIO_CS
+        int "SD CS GPIO (SPI mode only)"
+        default 34
+
+    config MICROFI_SD_MIGRATE_PCT
+        int "LittleFS -> SD migration trigger (%)"
+        default 60
+        range 30 85
+        help
+            When LittleFS crosses this percentage, oldest records migrate
+            to SD. Setting this near the LittleFS high watermark defeats
+            the tiering benefit.
+
+    config MICROFI_SD_HIGH_WATER_PCT
+        int "SD eviction high watermark (%)"
+        default 90
+        range 60 99
+
+    config MICROFI_SD_LOW_WATER_PCT
+        int "SD eviction low watermark (%)"
+        default 80
+        range 50 95
+
+endif
+
+# ---- Retention policy (default for new connections) -------------------------
+
+choice
+    prompt "Default retention policy for new connections"
+    default MICROFI_RETENTION_DROP_OLDEST
+    help
+        Sets the policy used by any connection that doesn't specify one
+        explicitly in the flow definition. Sensor-fed flows almost always
+        want DropOldest; flows carrying labeled research data almost
+        always want BackPressure.
+
+    config MICROFI_RETENTION_DROP_OLDEST
+        bool "DropOldest (FIFO; recommended for sensor flows)"
+
+    config MICROFI_RETENTION_BACK_PRESSURE
+        bool "BackPressure (NiFi default; pause upstream when full)"
+
+    config MICROFI_RETENTION_FAIL_WRITES
+        bool "FailWrites (return error to caller; useful in tests)"
+endchoice
+
+config MICROFI_EVICTION_BATCH_HINT
+    int "Eviction batch hint (records per pass; 0 = until low water)"
+    default 0
+    range 0 1000
+    help
+        Hint for how many records to evict per pass when crossing the
+        high watermark. 0 means "evict until usage drops below the low
+        watermark" - size-bounded, the recommended behaviour. Positive
+        values cap evictions per pass; useful in tests or pathological
+        record-size mixes where one giant FlowFile could free more than
+        you want in a single pass.
+
+# ---- Observability ----------------------------------------------------------
+
+config MICROFI_STORAGE_METRICS
+    bool "Emit storage metrics in EFM heartbeat"
+    default y
+    help
+        Adds these fields to flowInfo.microfi in the heartbeat envelope:
+        littleFsUsedBytes, littleFsCapacityBytes, evictionCount.
+        (SD-tier fields are added when MICROFI_SD_OVERFLOW is enabled.)
+        Lets EFM monitor when a fleet is approaching its retention
+        ceiling. Disabling this opts out of the silent-eviction safety
+        story - not recommended.
+
+endmenu

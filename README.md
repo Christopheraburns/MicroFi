@@ -69,4 +69,36 @@ Edit `sdkconfig.defaults` (or `pio run -t menuconfig` → "MicroFi configuration
 Storage layer settings (under the "MicroFi storage" menu):
 
 - `CONFIG_MICROFI_LITTLEFS_HIGH_WATER_PCT` / `CONFIG_MICROFI_LITTLEFS_LOW_WATER_PCT` — eviction watermarks for the durable queue. Defaults 80/70 keep writes in the predictable-performance band.
-- `CONFIG_MICROFI_RETENTION_DROP_OLDEST` / `..._BACK_PRESSURE` / `..._FAIL_WRITES` — default retention policy for new connections. `DropOldest` is the right answer for sensor-fed flows (the source can't pause); `Bac
+- `CONFIG_MICROFI_RETENTION_DROP_OLDEST` / `..._BACK_PRESSURE` / `..._FAIL_WRITES` — default retention policy for new connections. `DropOldest` is the right answer for sensor-fed flows (the source can't pause); `BackPressure` matches NiFi defaults; `FailWrites` is mostly for tests.
+- `CONFIG_MICROFI_SD_OVERFLOW` — reserve the Kconfig surface for adding an SD card as a second-tier overflow store. Implementation is Phase 2; enabling today logs a warning and falls back to LittleFS-only.
+- `CONFIG_MICROFI_STORAGE_METRICS` — emit fill percentages and eviction counters under `flowInfo.microfi` in the heartbeat. Recommended on; turning it off opts out of operational visibility into silent evictions.
+
+## Durability story
+
+The agent ships with a custom partition table (`partitions.csv`) that carves the 16 MB of flash into a standard ESP-IDF bootloader region, two 2 MB OTA app slots (so EFM-pushed firmware updates work with rollback), and a ~12 MB LittleFS data partition for durable FlowFile storage. LittleFS was chosen over SPIFFS or FATFS for its crash-safe metadata updates — a power cut mid-write cannot corrupt the filesystem.
+
+Out of the box this sizes the agent for roughly **30 days of offline durability** under typical edge-sensor data rates (heartbeats, environmental sensors, event-triggered CSI features). When LittleFS usage crosses 80%, the configured retention policy kicks in: `DropOldest` (the default) evicts oldest records until usage drops back below 70%, so writes never fail and sensors never get refused. Eviction counters are reported in every heartbeat under `flowInfo.microfi`, so an operator can see when a fleet is starting to evict and respond before it becomes systemic data loss.
+
+For longer durability windows or higher-bandwidth workloads, the design supports an SD card as a second tier (LittleFS as the crash-safe recent tip, SD as bulk overflow). The Kconfig surface for this is already in place; the implementation is Phase 2.
+
+## Connecting to a Cloudera EFM server
+
+The agent sends a MiNiFi C2 protocol heartbeat (EFM 2.x envelope) to `CONFIG_MICROFI_C2_HEARTBEAT_URL`. The first heartbeat carries the full agent manifest derived from the static processor registry; subsequent heartbeats send only the manifest hash.
+
+Operations sent back from EFM in the heartbeat response are dispatched immediately:
+
+- **`DESCRIBE / manifest`** — flips an internal flag so the next heartbeat re-includes the full manifest.
+- **`UPDATE / configuration`** — resolves the flow-definition URL from `args.location` → `args.flowUrl` → `args.configuration` → `args.url`, falling back to a constructed `configContent/<op-id>` URL if none are present. The body is fetched, format-detected (NiFi versioned-flow-snapshot JSON or MiNiFi Config Version 3 YAML), parsed into a `FlowDef`, and applied to the running flow engine. The flow UUID is recovered from the URL when the payload doesn't carry one explicitly.
+
+No explicit POST to `CONFIG_MICROFI_C2_ACK_URL` is issued — EFM 2.x considers the operation acknowledged when the next heartbeat advertises a `flowInfo.flowId` matching the pushed flow UUID.
+
+Reachability: **`localhost` in the default URL won't work from a real ESP32** — to the device, `localhost` is itself, not your dev box. Two paths to a reachable EFM:
+
+1. **EFM on your LAN.** Set `CONFIG_MICROFI_C2_HEARTBEAT_URL` to `http://<efm-host-lan-ip>:10090/efm/api/c2-protocol/heartbeat` and make sure EFM is bound to `0.0.0.0:10090` (or that LAN IP) rather than `127.0.0.1`.
+2. **EFM behind a tunnel.** Run `ngrok http 10090` (or cloudflared, tailscale-funnel) on the EFM host and put the resulting public URL in the heartbeat setting.
+
+Once the heartbeat reaches EFM the agent auto-registers and appears in the EFM UI under the configured agent class.
+
+## Next steps
+
+See [`docs/Processor-Inventory-And-Roadmap.md`](docs/Processor-Inventory-And-Roadmap.md) for the first batch of Physical-AI-fabric. 

@@ -348,4 +348,8 @@ Write-Host "================================================" -ForegroundColor D
 Write-Host "   Reset Complete [$Mode]                      " -ForegroundColor DarkGreen
 Write-Host "================================================" -ForegroundColor DarkGreen
 Write-Host ""
-Write-Host "  EFM:   http://${EfmHost}:${EfmPo
+Write-Host "  EFM:   http://${EfmHost}:${EfmPort}/efm/ui" -ForegroundColor White
+if ($newId) {
+    Write-Host "  Agent: $newId  (registered on first heartbeat)" -ForegroundColor White
+}
+Write-Host ""

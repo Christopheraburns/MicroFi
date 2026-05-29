@@ -328,4 +328,62 @@ These processors do not exist in MiNiFi C++ because MiNiFi was never designed to
 | PutInfluxDB                 | InfluxDB line-protocol egress for time-series storage. | Most observability dashboards already speak Influx. | P2 |
 | PutNATS                     | NATS publish (JetStream-aware). | Lighter than Kafka, more peer-friendly than MQTT for some topologies. | P2 |
 | PutParquetS3                | Buffers FlowFiles into Parquet row groups, uploads to S3 (or S3-compatible) on rotation. | Direct path from edge to data-lake-format-of-record. **Yes (S3 + PSRAM only.)** | P2 (S3 only) |
-| RotateLittleFS              | Local ring-buffer storage on LittleFS for offline-tolerant flows; replays on reconnect. | Makes the fabric
+| RotateLittleFS              | Local ring-buffer storage on LittleFS for offline-tolerant flows; replays on reconnect. | Makes the fabric tolerant of WiFi outages without dropping data. | **P0** |
+
+### Health / observability
+
+| Processor                   | Description | Why It Matters | Priority |
+| :-------------------------- | :---------- | :------------- | :------: |
+| GetESP32SystemMetrics       | ESP-IDF heap free, min-ever-free, task watermarks, WiFi RSSI/throughput, CPU load; emits JSON FlowFiles. | The ProcFs equivalent for ESP32; needed to diagnose the fragmentation/RAM failure modes specific to this platform. | **P0** |
+| MonitorActivity             | Watchdog: fires a FlowFile (or resets) if no upstream activity within a window. | Catches sensor disconnects and frozen tasks; pairs with OTA recovery. | P1 |
+| EmitHeartbeat               | Periodic heartbeat aligned to the EFM Monitor schema (matches `[[project_microfi_efm_monitor_schema]]`). | Keeps EFM Monitor mode happy so the per-processor counter overlay and green connector badge work. | **P0** |
+
+### Edge inference (later, but worth scoping)
+
+| Processor                   | Description | Why It Matters | Priority |
+| :-------------------------- | :---------- | :------------- | :------: |
+| RunTFLiteMicro              | Loads a TFLite Micro model from flash; runs inference per FlowFile; emits prediction + confidence. | First on-device inference primitive; closes the loop from sensor → feature → decision without leaving the MCU. | P1 |
+| RunESPDLModel               | ESP-DL accelerated inference for ESP32-S3 (Espressif's in-house DL runtime). | S3 has dedicated SIMD-style ops; ESP-DL exploits them. | P2 (S3 only) |
+
+### Summary of proposed MicroFi-original processors
+
+| Category                    | Count | P0 Count |
+| :-------------------------- | ----: | -------: |
+| CSI & WiFi-passive sensing  |    12 |        5 |
+| Sensor I/O                  |    11 |        3 |
+| Feature / transform         |     8 |        4 |
+| Distributed flow-graph      |     6 |        3 |
+| Egress / storage            |     6 |        2 |
+| Health / observability      |     3 |        2 |
+| Edge inference              |     2 |        0 |
+| **Total**                   | **48** |  **19** |
+
+The P0 set (19 processors) plus the **23 directly portable MiNiFi processors** plus the most useful **5-10 Partial MiNiFi processors** (UpdateAttribute, RouteOnAttribute, MergeContent-binary, InvokeHTTP, ListenHTTP, CompressContent-gzip, ConvertRecord-CSV) gives you a build target of roughly **45-50 processors** — squarely in the practical envelope for a single ESP32-S3 binary, and a substantial superset of anything MiNiFi can offer at the sensing edge.
+
+---
+
+## Part 3 — Recommended build order
+
+**Wave 1 (foundations — already partly built, finish first):**
+UpdateAttribute, RouteOnAttribute, MergeContent (binary), PublishMQTT, InvokeHTTP, LogAttribute, GenerateFlowFile, EmitHeartbeat, GetESP32SystemMetrics.
+
+**Wave 2 (CSI minimum viable demo):**
+GetWiFiCSI, ExtractCSIAmplitudePhase, WindowCSI, DetectMotionCSI, AttachProvenance, AttachLabel, PutMQTTBatch.
+
+**Wave 3 (bistatic rig — the research contribution):**
+RunBistaticPair, SyncClockPTP, SiteToSiteLite, PublishFlowESPNow, EnforceOrder.
+
+**Wave 4 (sensor fusion + feature richness):**
+GetI2C, GetGPIO, GetIMU, FFTContent, WindowAggregate, ComputeDopplerSpectrum, RotateLittleFS.
+
+**Wave 5 (production polish):**
+QuantizeContent, NormalizeContent, AttachSchema, MonitorActivity, RunTFLiteMicro, PutHTTPBulk, GetCamera (S3 only).
+
+---
+
+## Sources
+
+- [apache/nifi-minifi-cpp on GitHub](https://github.com/apache/nifi-minifi-cpp)
+- [PROCESSORS.md (upstream)](https://github.com/apache/nifi-minifi-cpp/blob/main/PROCESSORS.md)
+- [Extensions.md (upstream)](https://github.com/apache/nifi-minifi-cpp/blob/main/Extensions.md)
+- [README.md (upstream, extension-to-CMAKE-flag mapping)](https://github.com/apache/nifi-minifi-cpp/blob/main/README.md)

@@ -120,4 +120,51 @@ void on_configure(void* state, const NodeProperty* props, size_t count) {
 }
 
 Status on_trigger(Session& session, void* state) {
-   
+    auto* s = static_cast<State*>(state);
+
+    const char*  payload     = s->has_custom_text ? s->custom_text : kDefaultPayload;
+    const size_t payload_len = s->has_custom_text
+                                 ? std::strlen(s->custom_text)
+                                 : kDefaultPayloadLen;
+
+    for (uint32_t b = 0; b < s->batch_size; ++b) {
+        FlowFile f;
+        f.assign_id(FlowEngine::instance().next_id());
+
+        char tick_buf[16];
+        std::snprintf(tick_buf, sizeof(tick_buf), "%u",
+                      static_cast<unsigned>(s->tick));
+
+        Status rc;
+        rc = f.set_attribute("source", "GenerateFlowFile");
+        if (rc != Status::Ok) return rc;
+        rc = f.set_attribute("tickIndex", tick_buf);
+        if (rc != Status::Ok) return rc;
+        rc = f.set_content(reinterpret_cast<const uint8_t*>(payload), payload_len);
+        if (rc != Status::Ok) return rc;
+
+        rc = session.transfer(f, "success");
+        if (rc != Status::Ok) return rc;
+
+        ++s->tick;
+    }
+    return Status::Ok;
+}
+
+ProcessorDescriptor descriptor = {
+    "GenerateFlowFile",
+    "Emits a FlowFile per tick; content and batch size configurable via EFM.",
+    &on_trigger,
+    &on_init,
+    &on_configure,
+    sizeof(State),
+    "INPUT_FORBIDDEN",  // source: no incoming connections
+    kProperties,
+    kPropertyCount,
+};
+
+}  // namespace
+}  // namespace gen
+}  // namespace microfi
+
+MICROFI_REGISTER_PROCESSOR(::microfi::gen::descriptor)
