@@ -14,8 +14,8 @@
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 
 # ---- MicroFi agent defaults --------------------------------------------------
-CONFIG_MICROFI_AGENT_CLASS="default"
-CONFIG_MICROFI_AGENT_ID=""
+CONFIG_MICROFI_AGENT_CLASS="ESP32"
+CONFIG_MICROFI_AGENT_ID="microfi_1"
 CONFIG_MICROFI_HEARTBEAT_INTERVAL_MS=30000
 
 # ---- LittleFS / storage ------------------------------------------------------
