@@ -1,0 +1,16 @@
+# MicroFi local secrets template.
+#
+# Copy this file to sdkconfig.defaults.local and fill in your values.
+# sdkconfig.defaults.local is gitignored -- never commit real credentials.
+#
+# Usage:
+#   cp sdkconfig.defaults.local.example sdkconfig.defaults.local
+#   # edit sdkconfig.defaults.local with your SSID, password, and EFM host
+#
+# If this file is missing at build time, the firmware will compile but the
+# device will fail to connect to WiFi or EFM at runtime.
+
+CONFIG_MICROFI_WIFI_SSID="your_wifi_ssid"
+CONFIG_MICROFI_WIFI_PASSWORD="your_wifi_password"
+CONFIG_MICROFI_C2_HEARTBEAT_URL="http://your-efm-host:10090/efm/api/c2-protocol/heartbeat"
+CONFIG_MICROFI_C2_ACK_URL="http://your-efm-host:10090/efm/api/c2-protocol/acknowledge"

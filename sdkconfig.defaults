@@ -1,0 +1,51 @@
+# MicroFi project-level Kconfig defaults.
+#
+# Non-secret settings shared by all MicroFi builds.  User-specific secrets
+# (WiFi credentials, EFM URLs) belong in sdkconfig.defaults.local, which is
+# gitignored.  Copy sdkconfig.defaults.local.example to get started.
+#
+# Processing order: this file is loaded first; sdkconfig.defaults.local is
+# loaded second and may override anything set here.
+
+# ---- Stack sizes -------------------------------------------------------------
+# Increased from ESP-IDF defaults to handle:
+#   - manifest_init: PSA SHA-256 runs on the main task (~8 KB needed)
+#   - engine task: deepest path run_tick->on_trigger->try_push (~5.6 KB needed)
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
+
+# ---- MicroFi agent defaults --------------------------------------------------
+CONFIG_MICROFI_AGENT_CLASS="default"
+CONFIG_MICROFI_AGENT_ID=""
+CONFIG_MICROFI_HEARTBEAT_INTERVAL_MS=30000
+
+# ---- LittleFS / storage ------------------------------------------------------
+# Watermarks tuned for the 16 MB Lonely Binary S3 partition layout.
+CONFIG_MICROFI_LITTLEFS_PARTITION_LABEL="littlefs"
+CONFIG_MICROFI_LITTLEFS_FORMAT_ON_MOUNT_FAIL=y
+CONFIG_MICROFI_LITTLEFS_HIGH_WATER_PCT=80
+CONFIG_MICROFI_LITTLEFS_LOW_WATER_PCT=70
+CONFIG_MICROFI_SD_OVERFLOW=n
+CONFIG_MICROFI_RETENTION_DROP_OLDEST=y
+CONFIG_MICROFI_EVICTION_BATCH_HINT=0
+CONFIG_MICROFI_STORAGE_METRICS=y
+
+# ---- esp_littlefs component --------------------------------------------------
+CONFIG_LITTLEFS_ENABLE=y
+
+# ---- C++ standard library ----------------------------------------------------
+# No exceptions/RTTI -- matches the -fno-exceptions -fno-rtti flags in
+# cxx_cpp_std.py.
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# ---- mbedTLS -----------------------------------------------------------------
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_SSL_MAX_CONTENT_LEN=8192
+
+# ---- FreeRTOS ----------------------------------------------------------------
+CONFIG_FREERTOS_HZ=1000
+
+# ---- Logging -----------------------------------------------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y

@@ -13,7 +13,7 @@ scripts/secrets.local.ps1
 scripts/secrets.local.sh
 
 # ESP-IDF
-sdkconfig.defaults
+sdkconfig.defaults.local
 sdkconfig.esp32s3
 sdkconfig
 sdkconfig.old
