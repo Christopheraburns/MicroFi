@@ -1,0 +1,19 @@
+# MicroFi partition table for 4 MB flash targets (e.g. ESP32-S3-DevKitC-1).
+#
+# Single-app layout (no OTA) to leave maximum space for LittleFS.
+# Trade-off vs. partitions.csv (16 MB):
+#   - No OTA rollback slot
+#   - App slot capped at 1.5 MB (tight but sufficient for current firmware)
+#   - LittleFS reduced to ~2.4 MB (~30x smaller than the 16 MB target)
+#
+# Durability window at 2.4 MB depends heavily on FlowFile size and generation
+# rate. For typical sensor payloads (< 1 KB each) this gives thousands of
+# records -- adequate for short offline periods. For research flows with large
+# content buffers, consider reducing heartbeat interval or enabling SD overflow.
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+otadata,    data, ota,      0xf000,    0x2000,
+phy_init,   data, phy,      0x11000,   0x1000,
+factory,    app,  factory,  0x20000,   0x180000,
+littlefs,   data, littlefs, 0x1A0000,  0x260000,
