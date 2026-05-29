@@ -75,13 +75,27 @@ public:
 
     // ---- Lifecycle ----------------------------------------------------------
 
-    // Launch the default graph and the scheduler task.
-    // Returns Internal if called more than once.
+    // Apply a flow definition synchronously BEFORE the scheduler task starts.
+    // Use from app_main after storage_init() and before start() to prime the
+    // engine with a saved flow definition; the first heartbeat will then carry
+    // the correct flowId rather than the zero UUID.
+    // Returns Internal if start() has already been called.
+    Status prime(const FlowDef& def);
+
+    // Launch the scheduler task.  If prime() was called the engine starts with
+    // that graph; otherwise the hard-wired boot-default (GenerateFlowFile ->
+    // LogAttribute) is installed first.  Returns Internal if called twice.
     Status start();
 
     // Replace the running graph with the topology in `def`.
     // Thread-safe. The new graph takes effect at the next tick boundary.
     Status apply(const FlowDef& def);
+
+    // Scan the IRepository for persisted FlowFile records and push them into
+    // the matching connection queues.  Must be called after prime()/start()
+    // (so the connection UUIDs are known) and before c2_client_start().
+    // No-op if no repository is mounted or the repository is empty.
+    void replay_from_repository();
 
     // ---- Diagnostic accessors -----------------------------------------------
 

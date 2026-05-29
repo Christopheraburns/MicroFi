@@ -9,10 +9,10 @@
 # placeholders -- override them for your environment before flashing, either
 # by editing this file or via `pio run -t menuconfig` -> "MicroFi configuration".
 
-CONFIG_MICROFI_WIFI_SSID="<your-wifi-ssid>"
-CONFIG_MICROFI_WIFI_PASSWORD=""
-CONFIG_MICROFI_C2_HEARTBEAT_URL="http://172.28.82.242:10090/efm/api/c2-protocol/heartbeat"
-CONFIG_MICROFI_C2_ACK_URL="http://172.28.82.242:10090/efm/api/c2-protocol/acknowledge"
+CONFIG_MICROFI_WIFI_SSID="matrix"
+CONFIG_MICROFI_WIFI_PASSWORD="Enpykwzc1"
+CONFIG_MICROFI_C2_HEARTBEAT_URL="http://192.168.243.226:10090/efm/api/c2-protocol/heartbeat"
+CONFIG_MICROFI_C2_ACK_URL="http://192.168.243.226:10090/efm/api/c2-protocol/acknowledge"
 CONFIG_MICROFI_AGENT_CLASS="default"
 CONFIG_MICROFI_AGENT_ID=""
 CONFIG_MICROFI_HEARTBEAT_INTERVAL_MS=30000

@@ -77,6 +77,17 @@ public:
     // reboot and by the eviction logic to find the next victim.
     virtual Status oldest(RecordId* out_id) const = 0;
 
+    // Get the record id immediately following `after` in insertion order.
+    // Returns NotFound if `after` is the newest record or the repository is
+    // empty. Used by replay_from_repository() to iterate all records without
+    // erasing them. Backends that do not support ordered iteration return
+    // NotImplemented; callers must fall back gracefully.
+    virtual Status next(RecordId after, RecordId* out_id) const {
+        (void)after; (void)out_id;
+        return Status::NotImplemented;
+    }
+
+
     // ---- Configuration ----------------------------------------------------
 
     virtual RetentionPolicy retention_policy() const = 0;

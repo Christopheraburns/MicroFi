@@ -43,6 +43,7 @@ public:
     Status read(RecordId id, uint8_t* buf, size_t* buf_size) const override;
     Status erase(RecordId id) override;
     Status oldest(RecordId* out_id) const override;
+    Status next(RecordId after, RecordId* out_id) const override;
 
     RetentionPolicy retention_policy() const override { return policy_; }
     void set_retention_policy(RetentionPolicy p) override { policy_ = p; }

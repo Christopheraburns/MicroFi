@@ -52,6 +52,13 @@ public:
     // a record through the engine without paying for full provenance.
     uint64_t id() const { return id_; }
     void assign_id(uint64_t id) { id_ = id; }
+    // Repository record identifier.  0 = not persisted to flash.
+    // Set by Queue::try_push() after writing to IRepository; carried through
+    // the queue slot; read by the engine's sink commit path to erase the record
+    // after successful downstream processing.
+    uint64_t record_id() const       { return record_id_; }
+    void set_record_id(uint64_t rid) { record_id_ = rid; }
+
 
     void clear();
 
@@ -62,6 +69,7 @@ private:
     };
 
     uint64_t id_           = 0;
+    uint64_t record_id_   = 0;
     size_t   n_attrs_      = 0;
     Attr     attrs_[kMaxAttributes] = {};
     uint8_t  content_[kInlineContentBytes] = {0};

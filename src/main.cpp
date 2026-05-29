@@ -5,13 +5,18 @@
 //   2. Build the agent manifest from the static registry (+ its hash).
 //   3. Log the registered processors (sanity check on the static registry).
 //   4. Bring up WiFi.
-//   5. Start the flow engine (hard-wired GenerateFlowFile -> LogAttribute).
-//   6. Start the C2 heartbeat client (EFM 2.x envelope).
+//   5. Mount storage (LittleFS); load saved flow def if present and prime engine.
+//   6. Start the flow engine; if primed it skips the boot-default graph.
+//   7. Replay persisted FlowFiles from IRepository into connection queues.
+//   8. Start the C2 heartbeat client (EFM 2.x envelope).
 // Then app_main returns and FreeRTOS continues running our tasks.
 
 #include "microfi/agent_id.h"
 #include "microfi/c2_client.h"
+#include "microfi/flow_def.h"
 #include "microfi/flow_engine.h"
+#include "microfi/flow_parser.h"
+#include "microfi/flow_store.h"
 #include "microfi/manifest.h"
 #include "microfi/registry.h"
 #include "microfi/storage.h"
@@ -20,6 +25,8 @@
 
 #include "esp_log.h"
 #include "sdkconfig.h"
+
+#include <cstdlib>
 
 static const char* TAG = "microfi";
 
@@ -37,8 +44,7 @@ extern "C" void app_main(void) {
 
     // Storage subsystem: mount LittleFS so the engine has a durable
     // repository available. Non-fatal on failure -- the agent continues in
-    // volatile-only mode (FlowFiles will not survive reboot) and the
-    // condition is loud-logged for diagnosis.
+    // volatile-only mode (FlowFiles will not survive reboot).
     const microfi::Status storage_rc = microfi::storage_init();
     if (storage_rc != microfi::Status::Ok) {
         ESP_LOGW(TAG, "storage init failed: %s -- volatile-only mode",
@@ -59,9 +65,50 @@ extern "C" void app_main(void) {
 
     const microfi::Status wifi_rc = microfi::wifi_start_and_wait(20000);
     if (wifi_rc != microfi::Status::Ok) {
-        ESP_LOGW(TAG, "wifi not up (%s); continuing -- engine will run, "
-                      "heartbeats will be skipped until link comes up",
+        ESP_LOGW(TAG, "wifi not up (%s); continuing -- heartbeats skipped until link comes up",
                  microfi::to_string(wifi_rc));
+    }
+
+    // If storage came up, try to restore the last known flow definition so the
+    // engine starts with the right graph and the first heartbeat carries the
+    // correct flowId (avoiding another UPDATE/configuration round-trip).
+    // Heap-allocate the parse buffer: kFlowDefMaxBytes (16 KB) is too large
+    // for the main_task stack or a static BSS slot.
+    if (storage_rc == microfi::Status::Ok) {
+        char* flow_buf = static_cast<char*>(std::malloc(microfi::kFlowDefMaxBytes));
+        if (flow_buf == nullptr) {
+            ESP_LOGW(TAG, "flow_buf alloc failed -- boot default");
+        } else {
+            size_t flow_len = 0;
+            const microfi::Status load_rc =
+                microfi::flow_def_load(flow_buf, microfi::kFlowDefMaxBytes, &flow_len);
+            if (load_rc == microfi::Status::Ok && flow_len > 0) {
+                microfi::FlowDef def{};
+                const microfi::Status parse_rc =
+                    microfi::flow_parse(flow_buf, def);
+                if (parse_rc == microfi::Status::Ok && def.node_count > 0) {
+                    // YAML carries no UUID; restore it from the sidecar file.
+                    if (def.flow_id[0] == '\0') {
+                        microfi::flow_id_load(def.flow_id);
+                    }
+                    const microfi::Status prime_rc =
+                        microfi::FlowEngine::instance().prime(def);
+                    if (prime_rc == microfi::Status::Ok) {
+                        ESP_LOGI(TAG, "engine primed from saved flow def (flow_id=%.36s)",
+                                 def.flow_id);
+                    } else {
+                        ESP_LOGW(TAG, "prime failed (%s) -- boot default",
+                                 microfi::to_string(prime_rc));
+                    }
+                } else if (parse_rc != microfi::Status::Ok) {
+                    ESP_LOGW(TAG, "saved flow def parse failed (%s) -- boot default",
+                             microfi::to_string(parse_rc));
+                }
+            } else if (load_rc != microfi::Status::NotFound) {
+                ESP_LOGW(TAG, "flow_def_load: %s", microfi::to_string(load_rc));
+            }
+            std::free(flow_buf);
+        }
     }
 
     const microfi::Status engine_rc = microfi::FlowEngine::instance().start();
@@ -70,6 +117,9 @@ extern "C" void app_main(void) {
                  microfi::to_string(engine_rc));
         return;
     }
+
+    // Replay any FlowFiles that were in-flight before the last power cycle.
+    microfi::FlowEngine::instance().replay_from_repository();
 
     const microfi::Status c2_rc = microfi::c2_client_start();
     if (c2_rc != microfi::Status::Ok) {

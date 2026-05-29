@@ -21,8 +21,10 @@
 
 #include "microfi/flow_engine.h"
 
+#include "microfi/flowfile_store.h"
 #include "microfi/registry.h"
 #include "microfi/session.h"
+#include "microfi/storage.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -72,52 +74,73 @@ size_t FlowEngine::queue_depth() const {
 Status FlowEngine::start() {
     if (started_) return Status::Internal;
 
-    auto& reg = Registry::instance();
-    const ProcessorDescriptor* src = reg.find(kDefaultSource);
-    const ProcessorDescriptor* snk = reg.find(kDefaultSink);
+    // If prime() was already called, the graph is set up and we go straight
+    // to launching the task.  Otherwise install the boot-default graph.
+    if (node_count_ == 0) {
+        auto& reg = Registry::instance();
+        const ProcessorDescriptor* src = reg.find(kDefaultSource);
+        const ProcessorDescriptor* snk = reg.find(kDefaultSink);
 
-    if (src == nullptr || snk == nullptr) {
-        ESP_LOGE(TAG, "default processors '%s'/'%s' not found",
+        if (src == nullptr || snk == nullptr) {
+            ESP_LOGE(TAG, "default processors '%s'/'%s' not found",
+                     kDefaultSource, kDefaultSink);
+            return Status::NotFound;
+        }
+        if (src->state_size > kStateBytes || snk->state_size > kStateBytes) {
+            ESP_LOGE(TAG, "default processor state exceeds kStateBytes (%u)",
+                     static_cast<unsigned>(kStateBytes));
+            return Status::InvalidArg;
+        }
+
+        // Node 0: source
+        {
+            Node& n = nodes_[0];
+            std::memset(&n, 0, sizeof(n));
+            n.desc   = src;
+            n.active = true;
+            std::strncpy(n.id, "default-source", sizeof(n.id) - 1);
+            if (src->on_init) src->on_init(n.state);
+        }
+        // Node 1: sink
+        {
+            Node& n = nodes_[1];
+            std::memset(&n, 0, sizeof(n));
+            n.desc   = snk;
+            n.active = true;
+            std::strncpy(n.id, "default-sink", sizeof(n.id) - 1);
+            if (snk->on_init) snk->on_init(n.state);
+        }
+        node_count_ = 2;
+
+        // Connection 0: node[0] success -> node[1]
+        connections_[0].src = 0;
+        connections_[0].dst = 1;
+        std::strncpy(connections_[0].rel, kSuccessRel, sizeof(connections_[0].rel) - 1);
+        queues_[0].set_name("default:GFF->LA");
+        conn_count_ = 1;
+
+        ESP_LOGI(TAG, "engine starting with boot-default graph [%s -> %s]",
                  kDefaultSource, kDefaultSink);
-        return Status::NotFound;
+    } else {
+        ESP_LOGI(TAG, "engine starting with primed graph: %u node(s), %u conn(s), id=%.36s",
+                 static_cast<unsigned>(node_count_),
+                 static_cast<unsigned>(conn_count_),
+                 flow_id_[0] ? flow_id_ : "(none)");
     }
-    if (src->state_size > kStateBytes || snk->state_size > kStateBytes) {
-        ESP_LOGE(TAG, "default processor state exceeds kStateBytes (%u)",
-                 static_cast<unsigned>(kStateBytes));
-        return Status::InvalidArg;
-    }
-
-    // Node 0: source
-    {
-        Node& n = nodes_[0];
-        std::memset(&n, 0, sizeof(n));
-        n.desc   = src;
-        n.active = true;
-        std::strncpy(n.id, "default-source", sizeof(n.id) - 1);
-        if (src->on_init) src->on_init(n.state);
-    }
-    // Node 1: sink
-    {
-        Node& n = nodes_[1];
-        std::memset(&n, 0, sizeof(n));
-        n.desc   = snk;
-        n.active = true;
-        std::strncpy(n.id, "default-sink", sizeof(n.id) - 1);
-        if (snk->on_init) snk->on_init(n.state);
-    }
-    node_count_ = 2;
-
-    // Connection 0: node[0] success -> node[1]
-    connections_[0].src = 0;
-    connections_[0].dst = 1;
-    std::strncpy(connections_[0].rel, kSuccessRel, sizeof(connections_[0].rel) - 1);
-    queues_[0].set_name("default:GFF->LA");
-    conn_count_ = 1;
 
     started_ = true;
     const BaseType_t ok = xTaskCreate(
         &FlowEngine::task_entry, "microfi-engine",
-        /*stack_depth=*/6144,   // FlowFile(~1.3KB)+Session(~0.2KB) peak ~1.6KB
+        // Stack budget (deepest path: run_tick → on_trigger → try_push):
+        //   run_tick locals (FlowFile in + 2×Session):   ~1722 B
+        //   on_trigger (FlowFile f alive during transfer): ~1340 B
+        //   try_push (FlowFile copy):                      ~1340 B
+        //   Xtensa register window saves (~64B × 7):        ~450 B
+        //   FreeRTOS overhead:                              ~768 B
+        //   Total worst case:                              ~5620 B
+        // 12288 gives ~6.5 KB headroom for future processors.
+        // (ser_buf was moved to a static local in queue.cpp to keep it off-stack.)
+        /*stack_depth=*/12288,
         this,
         tskIDLE_PRIORITY + 2,
         &task_);
@@ -126,8 +149,22 @@ Status FlowEngine::start() {
         ESP_LOGE(TAG, "xTaskCreate failed");
         return Status::OutOfMemory;
     }
-    ESP_LOGI(TAG, "engine started  [default: %s -> %s]",
-             kDefaultSource, kDefaultSink);
+    return Status::Ok;
+}
+
+// ---- Synchronous prime (app_main, before start()) ----------------------------
+
+Status FlowEngine::prime(const FlowDef& def) {
+    if (started_) {
+        ESP_LOGW(TAG, "prime() called after start(); use apply() instead");
+        return Status::Internal;
+    }
+    if (def.node_count == 0) return Status::InvalidArg;
+    ESP_LOGI(TAG, "priming engine from saved flow def: %u node(s), %u conn(s), id=%.36s",
+             static_cast<unsigned>(def.node_count),
+             static_cast<unsigned>(def.connection_count),
+             def.flow_id[0] ? def.flow_id : "(none)");
+    rebuild_from_def(def);
     return Status::Ok;
 }
 
@@ -144,6 +181,70 @@ Status FlowEngine::apply(const FlowDef& def) {
              static_cast<unsigned>(def.connection_count),
              def.flow_id[0] ? def.flow_id : "(none)");
     return Status::Ok;
+}
+
+// ---- Replay persisted FlowFiles from IRepository ----------------------------
+//
+// Called from app_main after prime()/start() so connection UUIDs are known.
+
+void FlowEngine::replay_from_repository() {
+    IRepository* repo = repository();
+    if (repo == nullptr) return;
+
+    RecordId cur;
+    if (repo->oldest(&cur) != Status::Ok) {
+        ESP_LOGD(TAG, "replay: repository empty");
+        return;
+    }
+
+    uint32_t replayed = 0;
+    uint32_t orphans  = 0;
+
+    while (true) {
+        uint8_t buf[kFlowFileRecordMaxBytes];
+        size_t  buf_size = sizeof(buf);
+
+        const Status rd = repo->read(cur, buf, &buf_size);
+        if (rd != Status::Ok) {
+            ESP_LOGW(TAG, "replay: unreadable record %llu -- erasing",
+                     (unsigned long long)cur);
+            repo->erase(cur);
+        } else {
+            char     conn_id[37] = {};
+            FlowFile ff;
+            if (flowfile_deserialize(buf, buf_size, conn_id, &ff) != Status::Ok) {
+                ESP_LOGW(TAG, "replay: deserialize failed for record %llu -- erasing",
+                         (unsigned long long)cur);
+                repo->erase(cur);
+            } else {
+                bool found = false;
+                for (size_t c = 0; c < conn_count_; ++c) {
+                    if (std::strcmp(connections_[c].id, conn_id) == 0) {
+                        ff.set_record_id(cur);
+                        queues_[c].try_push(ff);
+                        ++replayed;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    ESP_LOGW(TAG, "replay: no connection for UUID %.8s... -- erasing orphan",
+                             conn_id);
+                    repo->erase(cur);
+                    ++orphans;
+                }
+            }
+        }
+
+        RecordId next_id;
+        if (repo->next(cur, &next_id) != Status::Ok) break;
+        cur = next_id;
+    }
+
+    if (replayed > 0 || orphans > 0) {
+        ESP_LOGI(TAG, "replay: %u FlowFile(s) restored, %u orphan(s) erased",
+                 replayed, orphans);
+    }
 }
 
 // ---- Rebuild graph from FlowDef (engine task only) ---------------------------
@@ -254,6 +355,19 @@ void FlowEngine::rebuild_from_def(const FlowDef& def) {
         ++new_cc;
     }
     conn_count_ = new_cc;
+
+    // Attach repository to each queue so new FlowFiles are persisted on push.
+    // Boot-default connections have no UUID (id[0]=='\0'); those stay volatile.
+    {
+        IRepository* repo = repository();
+        for (size_t c = 0; c < conn_count_; ++c) {
+            if (connections_[c].id[0] != '\0') {
+                queues_[c].attach_repo(repo, connections_[c].id);
+            } else {
+                queues_[c].attach_repo(nullptr, nullptr);
+            }
+        }
+    }
 
     // Update the flow ID surfaced in C2 heartbeats.
     std::strncpy(flow_id_,
@@ -370,6 +484,11 @@ void FlowEngine::run_tick() {
                         n.stats.ff_in       += 1;
                         n.stats.ff_out      += out;
                         n.stats.bytes_out   += in.content_size();
+                        // Erase the durable record now that processing succeeded.
+                        if (in.record_id() > 0) {
+                            IRepository* r = repository();
+                            if (r != nullptr) r->erase(in.record_id());
+                        }
                     } else if (rc != Status::Again) {
                         ESP_LOGW(TAG, "node[%u] '%s' sink tick: %s",
                                  static_cast<unsigned>(i), n.desc->name, to_string(rc));

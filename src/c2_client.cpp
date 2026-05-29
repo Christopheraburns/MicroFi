@@ -28,6 +28,7 @@
 #include "microfi/flow_parser.h"
 #include "microfi/manifest.h"
 #include "microfi/registry.h"
+#include "microfi/flow_store.h"
 #include "microfi/storage.h"
 #include "microfi/wifi.h"
 
@@ -600,6 +601,22 @@ void process_response(const char* body, size_t /*len*/) {
 
             FlowEngine::instance().apply(def);
             s_dump_next_heartbeat = true;   // log the next heartbeat so we can inspect monitoring fields
+            // Persist the raw flow def so it survives a power cycle.
+            // Non-fatal: if the save fails we still apply the flow in RAM.
+            const Status sv = flow_def_save(s_flow_buf, s_flow_len);
+            if (sv != Status::Ok) {
+                ESP_LOGW(TAG, "  -> flow_def_save failed (%s) -- volatile only",
+                         to_string(sv));
+            }
+            // Persist the flow UUID separately (37 bytes).  The YAML body has no
+            // UUID, so without this the engine would always boot with flow_id=zeros
+            // and EFM would re-push UPDATE_CONFIGURATION on every power cycle.
+            if (def.flow_id[0] != '\0') {
+                const Status sid = flow_id_save(def.flow_id);
+                if (sid != Status::Ok) {
+                    ESP_LOGW(TAG, "  -> flow_id_save failed (%s)", to_string(sid));
+                }
+            }
             ESP_LOGI(TAG, "  -> flow queued for apply (flow_id=%.36s)", def.flow_id);
             continue;
         }
@@ -642,6 +659,9 @@ Status post_heartbeat() {
     cfg.event_handler     = http_event;
     cfg.crt_bundle_attach = esp_crt_bundle_attach;
     cfg.timeout_ms        = 10000;
+    cfg.buffer_size_tx    = 8192;  // heartbeat with manifest is ~6.5 KB; default 512 B causes
+                                   // 13 small send() calls that stall on TCP slow-start and
+                                   // trip Jetty's 30-second idle timeout mid-body.
 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (client == nullptr) {

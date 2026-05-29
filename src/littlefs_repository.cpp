@@ -395,4 +395,29 @@ uint64_t LittleFSRepository::capacity_bytes_locked() const {
     return capacity_bytes_;
 }
 
+// Ordered iteration: return the smallest record id strictly greater than `after`.
+// Allows replay_from_repository() to walk all records oldest-first without erasing.
+Status LittleFSRepository::next(RecordId after, RecordId* out_id) const {
+    if (!mounted_ || out_id == nullptr) return Status::InvalidArg;
+
+    DIR* dir = opendir(base_path_);
+    if (dir == nullptr) return Status::IoError;
+
+    RecordId best = 0;
+    bool found = false;
+    while (struct dirent* ent = readdir(dir)) {
+        RecordId id;
+        if (!parse_record_name(ent->d_name, &id)) continue;
+        if (id > after && (!found || id < best)) {
+            best  = id;
+            found = true;
+        }
+    }
+    closedir(dir);
+
+    if (!found) return Status::NotFound;
+    *out_id = best;
+    return Status::Ok;
+}
+
 }  // namespace microfi

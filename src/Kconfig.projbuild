@@ -63,9 +63,10 @@ config MICROFI_LITTLEFS_PARTITION_LABEL
     string "LittleFS partition label"
     default "littlefs"
     help
-        Must match a partition entry in partitions.csv with subtype `spiffs`
-        (the SPIFFS subtype is reused for LittleFS - a naming wart in
-        ESP-IDF's partition format).
+        Must match the label of a partition in partitions.csv with subtype
+        `littlefs` (the dedicated subtype added in ESP-IDF 5.2; older
+        partition tables reused subtype `spiffs` instead and that still
+        works but raises a configure-time warning).
 
 config MICROFI_LITTLEFS_FORMAT_ON_MOUNT_FAIL
     bool "Format LittleFS partition if mount fails"

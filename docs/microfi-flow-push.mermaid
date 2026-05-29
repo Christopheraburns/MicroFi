@@ -1,0 +1,55 @@
+flowchart TD
+    TRIG["EFM heartbeat response contains\nUPDATE / configuration operation"]
+
+    TRIG --> OPID["op_id  ·  EFM-assigned operation UUID\nIdentifies this specific UPDATE request.\nUsed to construct fallback configContent URL if args carry no URL."]
+
+    OPID --> RESOLVE[Resolve config URL\nfrom op args]
+
+    subgraph URL_BOX [" URL Resolution Priority  (first non-empty wins) "]
+        direction TB
+        U1["1. args.location        ← observed in Cloudera EFM 2.x"]
+        U2["2. args.flowUrl         ← alias in some builds"]
+        U3["3. args.configuration   ← legacy MiNiFi C++ C2 protocol"]
+        U4["4. args.url             ← legacy alternate"]
+        U5["5. constructed fallback ← base_url/configContent/{op_id}"]
+        U1 --> U2 --> U3 --> U4 --> U5
+    end
+
+    RESOLVE --> URL_BOX
+
+    URL_BOX --> FETCH["GET flow definition\nfrom resolved URL\n(NiFi JSON or MiNiFi YAML v3)"]
+
+    FETCH --> DETECT{Format\ndetection}
+
+    DETECT -- "Starts with 'MiNiFi Config Version:'" --> YAML[flow_yaml_parse\nMiNiFi Config Version 3]
+    DETECT -- "Starts with '{'" --> JSON[flow_json_parse\nNiFi versioned-flow-snapshot JSON]
+
+    YAML --> EXTRACT
+    JSON --> EXTRACT
+
+    subgraph EXTRACT [" Extract IDs from flow definition "]
+        direction TB
+        EX1["flow_id  ·  flowContents.identifier  (or root.identifier)\nUUID assigned by EFM for this flow definition.\nThis is the key acknowledgment ID — MicroFi will echo it back\nin the next heartbeat to confirm the flow landed."]
+        EX2["node.id  ·  processor.identifier per processor\nUUID EFM assigned to each processor on the canvas.\nUsed in processorStatuses and agentInfo.status.components."]
+        EX3["connection.id  ·  connection.identifier per connection\nUUID EFM assigned to each connector arrow.\nKeys the flowInfo.queues map in the heartbeat."]
+    end
+
+    EXTRACT --> APPLY["FlowEngine::apply(def)\nQueues new FlowDef in pending_def_\nSets pending_apply_ flag"]
+
+    APPLY --> TICK["Next engine tick boundary\nrebuild_from_def() called\nOld processors torn down\nNew processors wired up"]
+
+    TICK --> FLOWID_UPDATE["flow_id_ updated\nfrom zero UUID  →  EFM's flow UUID\ne.g.  a1b2c3d4-… (from flowContents.identifier)"]
+
+    FLOWID_UPDATE --> HB2["Next heartbeat POST"]
+
+    subgraph ACK_BOX [" Acknowledgment Heartbeat — flowInfo "]
+        direction TB
+        A1["flowId  →  EFM's flow UUID  ✓\nNow matches the pushed flow — EFM treats UPDATE as acknowledged"]
+        A2["versionedFlowSnapshotURI.flowId  →  EFM's flow UUID  ✓\nEnables Monitor Activity overlay in Flow Designer"]
+        A3["queues.{connection.id}  →  per-connection stats\nConnection UUIDs from the pushed flow definition"]
+        A4["processorStatuses[].id  →  node.id from pushed flow\nprocessorStatuses[].groupId  →  process_group_id (MAC-derived)\nEFM uses (groupId, processorId) pair to light up live counters"]
+    end
+
+    HB2 --> ACK_BOX
+
+    ACK_BOX --> EFM_ACK["EFM sees flowInfo.flowId\nmatches the flow it pushed\n→ UPDATE operation considered complete"]

@@ -22,6 +22,7 @@ void FlowFile::clear() {
         a.value[0] = '\0';
     }
     content_len_ = 0;
+    record_id_   = 0;
 }
 
 Status FlowFile::set_attribute(const char* key, const char* value) {

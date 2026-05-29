@@ -7,8 +7,9 @@
 #
 # Modes (--mode):
 #   full       (default)  Increment agent ID, recompile firmware, flash
-#                         ESP32, THEN stop EFM, wipe DB, restart EFM, open
-#                         serial monitor once EFM is ready.
+#                         ESP32, wipe LittleFS, THEN stop EFM, wipe DB,
+#                         restart EFM, and open serial monitor once EFM
+#                         is ready.
 #
 #                         Order matters: flashing first ensures the old
 #                         firmware stops heartbeating before EFM is wiped,
@@ -19,15 +20,24 @@
 #
 #   efm-only             Stop EFM, wipe DB, restart EFM only. Use when you
 #                        need a clean EFM state without touching firmware.
+#                        Does NOT wipe the device filesystem.
 #
-#   flash-only           Increment agent ID, recompile, flash, monitor.
-#                        Use when EFM state is fine and you only changed
-#                        firmware code.
+#   flash-only           Increment agent ID, recompile, flash, wipe
+#                        LittleFS, monitor. Use when EFM state is fine
+#                        and you only changed firmware code.
+#
+# Flags:
+#   --skip-littlefs-wipe  Skip the LittleFS filesystem wipe that normally
+#                         runs after the firmware upload in full and
+#                         flash-only modes. Use when you deliberately want
+#                         to preserve persisted files (.flowdef, .flowid,
+#                         FlowFile records) across a reflash.
 #
 # Usage:
-#   ./reset-dev-environment.sh                  # full mode
+#   ./reset-dev-environment.sh                           # full mode
 #   ./reset-dev-environment.sh --mode efm-only
 #   ./reset-dev-environment.sh --mode flash-only
+#   ./reset-dev-environment.sh --skip-littlefs-wipe      # keep filesystem
 #
 # Requires: sshpass, curl, sed, grep, and the PlatformIO CLI on PATH or at
 # the path configured in secrets.local.sh.
@@ -37,6 +47,7 @@ set -euo pipefail
 # --- ARG PARSING --------------------------------------------------------------
 
 MODE="full"
+SKIP_LITTLEFS_WIPE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -48,13 +59,17 @@ while [[ $# -gt 0 ]]; do
             MODE="${1#*=}"
             shift
             ;;
+        --skip-littlefs-wipe)
+            SKIP_LITTLEFS_WIPE=1
+            shift
+            ;;
         -h|--help)
-            sed -n '2,30p' "$0" | sed 's/^# //; s/^#//'
+            sed -n '2,45p' "$0" | sed 's/^# //; s/^#//'
             exit 0
             ;;
         *)
             echo "Unknown argument: $1" >&2
-            echo "Usage: $0 [--mode full|efm-only|flash-only]" >&2
+            echo "Usage: $0 [--mode full|efm-only|flash-only] [--skip-littlefs-wipe]" >&2
             exit 1
             ;;
     esac
@@ -242,6 +257,22 @@ if [[ "$MODE" != "efm-only" ]]; then
     fi
     echo
     write_ok "Firmware flashed -- ESP32 is now running new agent ID"
+
+    # 4b. Wipe the LittleFS partition (erases .flowdef, .flowid, and all
+    #     persisted FlowFile records, leaving firmware intact).
+    #     Skipped only if --skip-littlefs-wipe is explicitly passed.
+    if [[ $SKIP_LITTLEFS_WIPE -eq 0 ]]; then
+        write_step "Wiping LittleFS partition (uploadfs with empty data/)"
+        write_info "Running: $PIO_EXE run --project-dir $MICROFI_DIR -t uploadfs -e $PIO_ENV"
+        echo
+        if ! "$PIO_EXE" run --project-dir "$MICROFI_DIR" -t uploadfs -e "$PIO_ENV"; then
+            write_fail "uploadfs failed -- LittleFS NOT wiped"
+        else
+            write_ok "LittleFS wiped -- device will boot with no saved flow or FlowFile records"
+        fi
+    else
+        write_info "Skipping LittleFS wipe (--skip-littlefs-wipe set)"
+    fi
 
 fi  # end PIO block
 

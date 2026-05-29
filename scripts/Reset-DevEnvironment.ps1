@@ -30,6 +30,14 @@
 .PARAMETER Mode
     Full | EfmOnly | FlashOnly  (default: Full)
 
+.PARAMETER SkipLittleFSWipe
+    If set, skips the LittleFS filesystem wipe that normally runs after the
+    firmware upload in Full and FlashOnly modes.  Use this only when you
+    deliberately want to preserve persisted files (.flowdef, .flowid, FlowFile
+    records) across a reflash -- for example, when testing flow persistence
+    after a firmware-only change.  EfmOnly mode never touches the device
+    filesystem regardless of this flag.
+
 .NOTES
     Requires the Posh-SSH module (installed automatically on first run).
     SSH credentials are set in the CONFIGURATION section below.
@@ -37,7 +45,9 @@
 #>
 param(
     [ValidateSet("Full", "EfmOnly", "FlashOnly")]
-    [string]$Mode = "Full"
+    [string]$Mode = "Full",
+
+    [switch]$SkipLittleFSWipe
 )
 
 # --- CONFIGURATION ------------------------------------------------------------
@@ -216,7 +226,27 @@ if ($pioExit -ne 0) {
 }
 Write-Ok "Firmware flashed -- ESP32 is now running new agent ID"
 
+# 4b. Wipe the LittleFS partition (erases .flowdef, .flowid, and all
+#     persisted FlowFile records, leaving firmware intact).
+#     Skipped only if -SkipLittleFSWipe is explicitly passed.
+if (-not $SkipLittleFSWipe) {
+    Write-Step "Wiping LittleFS partition (uploadfs with empty data/)"
+    $pioFsArgs = @("run", "--project-dir", $MicroFiDir, "-t", "uploadfs", "-e", $PioEnv)
+    Write-Info "Running: $PioExe $($pioFsArgs -join ' ')"
+    & $PioExe @pioFsArgs
+    if ($LASTEXITCODE -ne 0) {
+        Write-Fail "uploadfs failed (exit $LASTEXITCODE) -- LittleFS NOT wiped"
+    } else {
+        Write-Ok "LittleFS wiped -- device will boot with no saved flow or FlowFile records"
+    }
+} else {
+    Write-Info "Skipping LittleFS wipe (-SkipLittleFSWipe set)"
+}
+
 } # end PIO block
+
+
+# EfmOnly never touches the device filesystem -- no LittleFS wipe.
 
 
 # ---- EFM BLOCK (skipped in FlashOnly mode) -----------------------------------

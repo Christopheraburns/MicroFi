@@ -34,6 +34,8 @@ idf_component_register(
     "c2_client.cpp"
     "storage.cpp"
     "littlefs_repository.cpp"
+    "flow_store.cpp"
+    "flowfile_store.cpp"
     "main.cpp"
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
@@ -52,7 +54,7 @@ idf_component_register(
     esp-tls
     freertos
     log
-    esp_littlefs
+    littlefs
   WHOLE_ARCHIVE
 )
 

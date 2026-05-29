@@ -1,0 +1,62 @@
+flowchart TD
+    BOOT([ESP32 Boot]) --> WIFI[WiFi Connect\nObtain IP address]
+
+    WIFI --> IDS[agent_id_init\nDerive all identifiers from MAC]
+
+    subgraph IDS_BOX [" Identifiers Derived from MAC "]
+        ID1["agent_id  ·  'microfi-aabbccddeeff'\nHuman-readable name; used as hostname in EFM Agent Manager.\nConfigurable via MICROFI_AGENT_ID Kconfig option."]
+        ID2["device_id  ·  'aabbccddeeff'\n12-char hex MAC. Hardware fingerprint sent in deviceInfo.\nNever changes for a given board."]
+        ID3["process_group_id  ·  UUID derived from MAC\nRoot process-group identity. Stable across reboots.\nEFM correlates processorStatuses[].groupId against this."]
+    end
+
+    IDS --> IDS_BOX
+
+    IDS_BOX --> ENGINE[FlowEngine::start\nBoot-default graph\nGenerateFlowFile → LogAttribute]
+
+    ENGINE --> FID["flow_id  ·  00000000-0000-0000-0000-000000000000\nZero UUID — hard-wired initial value.\nMeans: no flow has been pushed from EFM yet."]
+
+    FID --> C2[C2 Task starts\nHeartbeat loop begins]
+
+    C2 --> HB[Build Heartbeat JSON]
+
+    subgraph HB_BOX [" Heartbeat Payload  ·  POST /efm/api/c2-protocol/heartbeat "]
+        direction TB
+
+        HB1["identifier  ·  heartbeat-id\nagent_id + monotonic counter + uptime_ms.\nUnique per POST; not a UUID."]
+
+        subgraph AI [" agentInfo "]
+            AI1["identifier  →  agent_id\n'microfi-aabbccddeeff' — who I am"]
+            AI2["agentManifestHash  →  SHA of manifest JSON\nChange detection; full manifest included on first HB only"]
+            AI3["status.components.FlowController.uuid  →  process_group_id\nMAC-derived UUID — tells EFM which process group is running"]
+            AI4["status.components.{ProcessorName}.uuid  →  node.id\nUUID assigned by EFM for each processor node in the flow"]
+        end
+
+        subgraph DI [" deviceInfo "]
+            DI1["identifier  →  device_id\nMAC hex — hardware-level identity"]
+            DI2["networkInfo.hostname  →  agent_id\n'microfi-aabbccddeeff'"]
+            DI3["networkInfo.ipAddress  →  DHCP IP\nCurrent IP; may change between heartbeats"]
+        end
+
+        subgraph FI [" flowInfo "]
+            FI1["flowId  →  zero UUID  (00000000-…)\nNo real flow yet — EFM shows agent as 'up, no flow'"]
+            FI2["versionedFlowSnapshotURI.flowId  →  zero UUID\nSame as flowId; EFM uses to gate Monitor Activity overlay"]
+            FI3["queues  →  empty object  {}\nBoot-default connection has no UUID — nothing to report"]
+            FI4["processorStatuses[].id  →  node.id\nPer-processor UUID; matches agentInfo.status.components key"]
+            FI5["processorStatuses[].groupId  →  process_group_id\nMAC-derived UUID; EFM indexes metrics by (groupId, id)"]
+        end
+    end
+
+    HB --> HB_BOX
+
+    HB_BOX --> POST[POST to EFM]
+    POST --> RESP[EFM returns requestedOperations]
+
+    RESP --> OPS{Operation\nin response?}
+
+    OPS -- "DESCRIBE / manifest" --> DESC[Set flag: re-send full\nagentManifest next heartbeat]
+    OPS -- "UPDATE / configuration" --> UPD[→ Flow Push path\nsee Chart 2]
+    OPS -- none --> WAIT[Wait heartbeat_interval_ms]
+
+    DESC --> WAIT
+    UPD --> WAIT
+    WAIT --> HB
