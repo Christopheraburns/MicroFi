@@ -1,0 +1,19 @@
+# MicroFi partition table for real 2 MB flash targets (e.g. this XIAO ESP32-S3
+# Sense unit -- esptool reported "Expected 4MB, found 2MB!" against
+# partitions_4mb.csv, whose littlefs partition ran ~2MB past the physical chip).
+#
+# Single-app layout (no OTA), same trade-off as the 4mb table, just re-sized so
+# every declared byte is real, addressable flash -- no partition extends past
+# 0x200000 (2 MB).
+#
+# App slot: 0x120000 (1,179,648 bytes / ~1.125 MB) -- current firmware is
+# 1,044,597 bytes, ~130 KB headroom for growth.
+# LittleFS: remaining 0xC0000 (786,432 bytes / 768 KB) -- smaller durability
+# window than the 4mb table's ~2.4 MB, but nothing here is out of bounds.
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+otadata,    data, ota,      0xf000,    0x2000,
+phy_init,   data, phy,      0x11000,   0x1000,
+factory,    app,  factory,  0x20000,   0x120000,
+littlefs,   data, littlefs, 0x140000,  0xC0000,
