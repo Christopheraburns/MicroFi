@@ -8,28 +8,29 @@
 // evaluator exists yet, so a configured value is written to the attribute
 // verbatim, unevaluated.
 //
-// Dynamic properties and this engine: ProcessorDescriptor has no fixed
-// property list here (matches upstream's "no fixed properties" shape) and
-// EFM's manifest always reports supportsDynamicProperties=false (hardcoded
-// in manifest.cpp, not per-processor) -- so the Flow Designer's own UI has
-// no "+" affordance to add a property to this node. The flow parser doesn't
-// care, though: flow_parser.cpp copies every key/value pair out of a pushed
-// node's "properties" object with no filtering against any declared list,
-// so pushing the flow directly via the Designer REST API with an explicit
-// properties object (the same way every processor in this fork has been
-// verified so far) works today. A real "+" button needs an engine change,
-// not a processor change.
+// Not true dynamic properties: an earlier revision of this file declared
+// zero fixed properties, relying on flow_parser.cpp copying every key/value
+// pair out of a pushed node's "properties" object with no filtering against
+// any declared list. That parses fine, but EFM's own flow *validation*
+// layer (GET .../validate, which /publish depends on) independently checks
+// every configured property name against propertyDescriptors and rejects
+// anything not declared -- "Property 'x' is not supported" -- blocking
+// publish entirely. Confirmed on hardware (issue #45 follow-on work): a
+// manifest with supportsDynamicProperties=false (hardcoded engine-wide in
+// manifest.cpp, not overridable per-processor) means EFM's Designer will
+// never treat any property as dynamic, no matter what the processor itself
+// declares. So this uses kMaxDynamicProps declared name/value slot pairs
+// ("Attribute 1 Name" / "Attribute 1 Value", ...) instead -- validates
+// cleanly, and on_configure reads each pair into the same DynAttr storage
+// the literal-values design already used.
 //
 // Mutation: Session::input()/transfer() only expose a `const FlowFile*` --
 // there is no in-place attribute-mutation path through Session. Work around
 // it by copying the input FlowFile (fixed-size, trivially copyable) into a
 // local, mutating the copy, and transferring the copy.
 //
-// Sizing: capped at kMaxDynamicProps=4 configured attributes, not the
-// engine-wide kMaxNodeProperties=8, to keep State inside the 256-byte
-// per-node slab (4 * (24 + 32) + 1 = 225 bytes). Four literal attributes is
-// enough to exercise attribute-mutation flows in testing; raise the cap
-// (and shrink key/value width or the slab) if a real flow needs more.
+// Sizing: capped at kMaxDynamicProps=4 configured attributes to keep State
+// inside the 256-byte per-node slab (4 * (24 + 32) + 1 = 225 bytes).
 
 #include "microfi/flowfile.h"
 #include "microfi/processor.h"
@@ -39,6 +40,7 @@
 
 #include "esp_log.h"
 
+#include <cstdio>
 #include <cstring>
 
 namespace microfi {
@@ -63,25 +65,50 @@ struct State {
 };
 static_assert(sizeof(State) <= 256, "State larger than engine slab");
 
+// ---- Property declarations: declared name/value slot pairs --------------
+// EFM's flow validation rejects any property not in this list (see file
+// header) so upstream's "true" dynamic properties aren't reachable through
+// the Designer API today -- named slots are the workable shape.
+
+static const PropertyDescriptor kProperties[] = {
+    { "Attribute 1 Name",  "Name of the first attribute to set.",  nullptr, false, nullptr, 0 },
+    { "Attribute 1 Value", "Literal value for the first attribute.", nullptr, false, nullptr, 0 },
+    { "Attribute 2 Name",  "Name of the second attribute to set.", nullptr, false, nullptr, 0 },
+    { "Attribute 2 Value", "Literal value for the second attribute.", nullptr, false, nullptr, 0 },
+    { "Attribute 3 Name",  "Name of the third attribute to set.",  nullptr, false, nullptr, 0 },
+    { "Attribute 3 Value", "Literal value for the third attribute.", nullptr, false, nullptr, 0 },
+    { "Attribute 4 Name",  "Name of the fourth attribute to set.", nullptr, false, nullptr, 0 },
+    { "Attribute 4 Value", "Literal value for the fourth attribute.", nullptr, false, nullptr, 0 },
+};
+static constexpr size_t kPropertyCount =
+    sizeof(kProperties) / sizeof(kProperties[0]);
+
 void on_configure(void* state, const NodeProperty* props, size_t count) {
     auto* s = static_cast<State*>(state);
     s->count = 0;
 
-    for (size_t i = 0; i < count && s->count < kMaxDynamicProps; ++i) {
-        const NodeProperty& p = props[i];
-        if (p.key[0] == '\0') continue;
+    char name_key[24];
+    char value_key[24];
+
+    for (size_t slot = 1; slot <= kMaxDynamicProps; ++slot) {
+        std::snprintf(name_key,  sizeof(name_key),  "Attribute %u Name",  static_cast<unsigned>(slot));
+        std::snprintf(value_key, sizeof(value_key), "Attribute %u Value", static_cast<unsigned>(slot));
+
+        const char* name_val  = nullptr;
+        const char* value_val = nullptr;
+        for (size_t i = 0; i < count; ++i) {
+            if (std::strcmp(props[i].key, name_key) == 0)  name_val  = props[i].value;
+            if (std::strcmp(props[i].key, value_key) == 0) value_val = props[i].value;
+        }
+
+        if (name_val == nullptr || name_val[0] == '\0') continue;  // slot unused
 
         DynAttr& d = s->attrs[s->count];
-        std::strncpy(d.key, p.key, kKeyLen - 1);
+        std::strncpy(d.key, name_val, kKeyLen - 1);
         d.key[kKeyLen - 1] = '\0';
-        std::strncpy(d.value, p.value, kValLen - 1);
+        std::strncpy(d.value, value_val ? value_val : "", kValLen - 1);
         d.value[kValLen - 1] = '\0';
         ++s->count;
-    }
-
-    if (count > kMaxDynamicProps) {
-        ESP_LOGW(TAG, "flow configured %u properties, only the first %u are applied",
-                 static_cast<unsigned>(count), static_cast<unsigned>(kMaxDynamicProps));
     }
 }
 
@@ -109,14 +136,15 @@ Status on_trigger(Session& session, void* state) {
 
 ProcessorDescriptor descriptor = {
     "UpdateAttribute",
-    "Adds/overwrites literal-value attributes on the FlowFile from configured "
-    "dynamic properties (no Expression Language evaluation).",
+    "Adds/overwrites literal-value attributes on the FlowFile from up to 4 "
+    "configured name/value slot pairs (no Expression Language evaluation).",
     &on_trigger,
     nullptr,          // no on_init
-    &on_configure,    // reads up to kMaxDynamicProps key/value pairs
+    &on_configure,    // reads up to kMaxDynamicProps name/value slot pairs
     sizeof(State),
     "INPUT_REQUIRED", // must have an incoming connection
-    nullptr, 0,       // no fixed properties -- see file header
+    kProperties,
+    kPropertyCount,
 };
 
 }  // namespace
