@@ -40,6 +40,7 @@ idf_component_register(
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
     "processors/publish_mqtt.cpp"
+    "processors/update_attribute.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
