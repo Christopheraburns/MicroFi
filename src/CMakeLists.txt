@@ -41,6 +41,7 @@ idf_component_register(
     "processors/log_attribute.cpp"
     "processors/publish_mqtt.cpp"
     "processors/update_attribute.cpp"
+    "processors/get_gpio.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
@@ -58,6 +59,7 @@ idf_component_register(
     freertos
     log
     littlefs
+    driver
   WHOLE_ARCHIVE
 )
 
