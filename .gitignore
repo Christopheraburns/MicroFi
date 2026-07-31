@@ -15,6 +15,8 @@ scripts/secrets.local.sh
 # ESP-IDF
 sdkconfig.defaults.local
 sdkconfig.esp32s3
+sdkconfig.esp32s3-2mb
+sdkconfig.esp32s3-4mb
 sdkconfig
 sdkconfig.old
 sdkconfig.*.old
