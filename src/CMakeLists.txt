@@ -42,6 +42,7 @@ idf_component_register(
     "processors/publish_mqtt.cpp"
     "processors/update_attribute.cpp"
     "processors/get_gpio.cpp"
+    "processors/listen_http.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
@@ -60,6 +61,7 @@ idf_component_register(
     log
     littlefs
     driver
+    esp_http_server
   WHOLE_ARCHIVE
 )
 
