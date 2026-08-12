@@ -1,0 +1,10 @@
+# Flash-size overlay for 8 MB targets (XIAO ESP32-S3 Sense).
+#
+# ESP-IDF's ESPTOOLPY_FLASHSIZE defaults to 2MB when unset -- and PlatformIO's
+# espidf builder only *warns* on a mismatch with board_upload.flash_size
+# ("Warning! Flash memory size mismatch detected. Expected <board>, found
+# <sdkconfig>!"). That warning compares two config values, not the physical
+# chip -- misreading it as a hardware measurement is what produced the
+# "this XIAO has 2MB flash" myth (2026-07; corrected by JEDEC read
+# 2026-08-12, all units are 8 MB GD25Q64).
+CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y

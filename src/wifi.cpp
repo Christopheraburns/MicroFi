@@ -51,6 +51,9 @@ void on_event(void* /*arg*/, esp_event_base_t base, int32_t id, void* data) {
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
         s_connected = false;
 
+        auto* dc = static_cast<wifi_event_sta_disconnected_t*>(data);
+        ESP_LOGW(TAG, "disconnect reason=%d rssi=%d", dc ? dc->reason : -1, dc ? dc->rssi : 0);
+
         if (s_ever_connected) {
             // Persistent phase: always reconnect — never give up.
             ++s_attempts;
