@@ -15,7 +15,7 @@ Pre-alpha scope:
 - [x] HTTPS heartbeat POST to a configurable C2 URL (mbedTLS via `esp_http_client`).
 - [x] Two embedded processors: `GenerateFlowFile`, `LogAttribute`.
 - [x] Flow-definition parsing — NiFi versioned-flow-snapshot (JSON) with auto-detect fall-through to MiNiFi Config Version 3 (YAML).
-- [x] C2 operation dispatch — `DESCRIBE/manifest` re-send and `UPDATE/configuration` fetch + parse + engine apply. EFM 2.x ack is delivered implicitly via the next heartbeat's `flowInfo.flowId`.
+- [x] C2 operation dispatch — `DESCRIBE/manifest` re-send and `UPDATE/configuration` fetch + parse + engine apply, followed by an explicit acknowledge POST (`FULLY_APPLIED` / `NOT_APPLIED`) to `CONFIG_MICROFI_C2_ACK_URL`.
 - [x] Durable storage substrate — LittleFS mount, `IRepository` interface, `LittleFSRepository` with watermark eviction (DropOldest / BackPressure / FailWrites), storage metrics in the EFM heartbeat. Default partition layout in `partitions.csv` sizes for ~30 days offline.
 - [ ] Engine queue integration — replay queued FlowFiles on boot, persist on enqueue, erase on successful ack.
 - [ ] SD card overflow tier — Kconfig surface is in place (`MICROFI_SD_OVERFLOW`); `SdRepository` / `TieredRepository` implementations are Phase 2.
@@ -110,7 +110,7 @@ Operations sent back from EFM in the heartbeat response are dispatched immediate
 - **`DESCRIBE / manifest`** — flips an internal flag so the next heartbeat re-includes the full manifest.
 - **`UPDATE / configuration`** — resolves the flow-definition URL from `args.location` → `args.flowUrl` → `args.configuration` → `args.url`, falling back to a constructed `configContent/<op-id>` URL if none are present. The body is fetched, format-detected (NiFi versioned-flow-snapshot JSON or MiNiFi Config Version 3 YAML), parsed into a `FlowDef`, and applied to the running flow engine. The flow UUID is recovered from the URL when the payload doesn't carry one explicitly.
 
-No explicit POST to `CONFIG_MICROFI_C2_ACK_URL` is issued — EFM 2.x considers the operation acknowledged when the next heartbeat advertises a `flowInfo.flowId` matching the pushed flow UUID.
+After the apply (or a failed fetch/parse/apply), the agent POSTs an explicit acknowledge to `CONFIG_MICROFI_C2_ACK_URL`: `{"operationId": …, "operationState": {"state": "FULLY_APPLIED" | "NOT_APPLIED", "details": …}}`. EFM 2.x maps `FULLY_APPLIED` to operation state DONE and anything else to FAILED — it does **not** honor an implicit ack via the heartbeat's `flowInfo.flowId` (an unacknowledged operation times out to FAILED server-side). The ack body deliberately omits `agentInfo`/`deviceInfo`/`flowInfo`; including any of them makes EFM additionally process the ack as a heartbeat.
 
 Reachability: **`localhost` in the default URL won't work from a real ESP32** — to the device, `localhost` is itself, not your dev box. Two paths to a reachable EFM:
 
