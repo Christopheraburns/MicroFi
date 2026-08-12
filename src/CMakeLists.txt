@@ -39,6 +39,7 @@ idf_component_register(
     "main.cpp"
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
+    "processors/publish_mqtt.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
@@ -50,6 +51,7 @@ idf_component_register(
     esp_netif
     nvs_flash
     esp_http_client
+    mqtt
     mbedtls
     esp-tls
     freertos
