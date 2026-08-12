@@ -170,6 +170,7 @@ ProcessorDescriptor descriptor = {
     "INPUT_FORBIDDEN",  // source: no incoming connections
     kProperties,
     kPropertyCount,
+    nullptr,          // on_stop -- no external resources
 };
 
 }  // namespace

@@ -259,8 +259,16 @@ void FlowEngine::replay_from_repository() {
 void FlowEngine::rebuild_from_def(const FlowDef& def) {
     auto& reg = Registry::instance();
 
-    // Step 1: Deactivate all existing nodes so run_tick() skips them if
-    //         we need to yield mid-rebuild (we won't, but defensive).
+    // Step 1: Stop, then deactivate, all existing nodes.  on_stop releases
+    //         external resources the old instances hold (httpd server, MQTT
+    //         client, FreeRTOS queues) before Step 3 zeroes the state slabs;
+    //         skipping it orphans them on every republish (#150).
+    for (size_t i = 0; i < node_count_; ++i) {
+        Node& n = nodes_[i];
+        if (n.active && n.desc != nullptr && n.desc->on_stop != nullptr) {
+            n.desc->on_stop(n.state);
+        }
+    }
     for (size_t i = 0; i < kMaxNodes; ++i) nodes_[i].active = false;
 
     // Step 2: Drain all queues.  Old FlowFiles are discarded -- the new graph

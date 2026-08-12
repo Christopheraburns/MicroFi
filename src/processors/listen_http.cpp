@@ -17,12 +17,10 @@
 // bridge shape FlowEngine::apply() already uses (pending_def_ + mutex_),
 // just simpler since xQueueSend/Receive owns the hand-off.
 //
-// Known limitation, same as PublishMQTT: the server/queue handles live in
-// the per-node state slab, which the engine zeroes on every flow rebuild
-// (EFM republish). A republish orphans the previous httpd_handle_t/queue
-// rather than tearing them down -- fine for a single-flow verification
-// pass, worth revisiting (an on_teardown hook on ProcessorDescriptor) before
-// any processor with an external resource is treated as production-grade.
+// Teardown (#150): on_stop stops the httpd server and deletes the inbox
+// queue when the engine rebuilds the graph, so a republish never orphans
+// the port or leaks the queue. httpd_stop() blocks until the server task
+// exits, so the inbox is deleted only after no handler can touch it.
 
 #include "microfi/flowfile.h"
 #include "microfi/flow_engine.h"
@@ -160,7 +158,11 @@ void start_server(State* s) {
         return;
     }
 
-    s->inbox = xQueueCreate(4, sizeof(InboxItem));
+    // Reuse an inbox from a prior failed start -- recreating it on every
+    // retry tick leaks a queue per second once httpd_start is failing.
+    if (s->inbox == nullptr) {
+        s->inbox = xQueueCreate(4, sizeof(InboxItem));
+    }
     if (s->inbox == nullptr) {
         ESP_LOGE(TAG, "xQueueCreate failed");
         return;
@@ -186,6 +188,23 @@ void start_server(State* s) {
 
     s->started = true;
     ESP_LOGI(TAG, "listening on :%d%s", static_cast<int>(s->port), s->base_path);
+}
+
+// Engine task, on graph rebuild (#150). Stop the server first -- httpd_stop
+// blocks until the server task is gone -- then delete the inbox no handler
+// can be using anymore.
+void on_stop(void* state) {
+    auto* s = static_cast<State*>(state);
+    if (s->server != nullptr) {
+        httpd_stop(s->server);
+        s->server = nullptr;
+        ESP_LOGI(TAG, "listener on :%d stopped", static_cast<int>(s->port));
+    }
+    if (s->inbox != nullptr) {
+        vQueueDelete(s->inbox);
+        s->inbox = nullptr;
+    }
+    s->started = false;
 }
 
 Status on_trigger(Session& session, void* state) {
@@ -225,6 +244,7 @@ ProcessorDescriptor descriptor = {
     "INPUT_FORBIDDEN", // source: no incoming connections
     kProperties,
     kPropertyCount,
+    &on_stop,
 };
 
 }  // namespace

@@ -240,6 +240,7 @@ ProcessorDescriptor descriptor = {
     "INPUT_REQUIRED",  // acts on an incoming FlowFile (e.g. from ListenHTTP)
     kProperties,
     kPropertyCount,
+    nullptr,          // on_stop -- no external resources
 };
 
 }  // namespace

@@ -13,11 +13,9 @@
 // on_trigger call (once Broker URI / Topic are known from on_configure) and
 // connects asynchronously in the background. A FlowFile that arrives before
 // the CONNECTED event lands is dropped -- acceptable for a periodic ingress
-// source, which just re-publishes on the next tick. Note the client handle
-// is not torn down on a flow re-push (the per-node state slab is zeroed by
-// the engine's rebuild, silently orphaning any previously-started client);
-// fine for a single-flow verification pass, worth revisiting before this is
-// treated as production-grade.
+// source, which just re-publishes on the next tick. Teardown (#150): on_stop
+// stops and destroys the client on graph rebuild, so a republish never
+// leaves an old session fighting the new one over the same client id.
 
 #include "microfi/flowfile.h"
 #include "microfi/processor.h"
@@ -178,6 +176,20 @@ void start_client(State* s) {
              s->broker_uri, s->topic, s->qos);
 }
 
+// Engine task, on graph rebuild (#150). Stop before destroy so no event
+// callback fires into the state slab mid-teardown.
+void on_stop(void* state) {
+    auto* s = static_cast<State*>(state);
+    if (s->client != nullptr) {
+        esp_mqtt_client_stop(s->client);
+        esp_mqtt_client_destroy(s->client);
+        s->client = nullptr;
+        ESP_LOGI(TAG, "client for %s stopped", s->broker_uri);
+    }
+    s->started   = false;
+    s->connected = false;
+}
+
 Status on_trigger(Session& session, void* state) {
     auto* s = static_cast<State*>(state);
     const FlowFile* in = session.input();
@@ -224,6 +236,7 @@ ProcessorDescriptor descriptor = {
     "INPUT_REQUIRED", // sink: must have an incoming connection
     kProperties,
     kPropertyCount,
+    &on_stop,
 };
 
 }  // namespace
