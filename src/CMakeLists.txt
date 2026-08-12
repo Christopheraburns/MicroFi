@@ -43,6 +43,7 @@ idf_component_register(
     "processors/update_attribute.cpp"
     "processors/get_gpio.cpp"
     "processors/listen_http.cpp"
+    "processors/set_gpio.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
