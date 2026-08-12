@@ -16,9 +16,13 @@
 //   6. Subsequent heartbeats advertise the new flowInfo.flowId so EFM
 //      can confirm the update landed.
 //
-// Note: No explicit ACKNOWLEDGE POST is sent.  EFM 2.x considers the
-// operation acknowledged when the next heartbeat's flowInfo.flowId matches
-// the flow UUID it pushed.
+// Operation acknowledge:
+//   After the UPDATE/configuration op is fetched+parsed+applied (or fails),
+//   POST an explicit acknowledge to CONFIG_MICROFI_C2_ACK_URL.  EFM 2.x does
+//   NOT treat a matching heartbeat flowInfo.flowId as an implicit ack -- an
+//   unacknowledged operation row times out to FAILED on the server.  EFM maps
+//   the ack's operationState.state to the operation row:
+//     FULLY_APPLIED -> DONE, NO_OPERATION -> NOOP, anything else -> FAILED.
 
 #include "microfi/c2_client.h"
 
@@ -504,6 +508,62 @@ static bool extract_uuid_from_url(const char* url, char* dst, size_t dst_size) {
     return false;
 }
 
+// ---- Operation acknowledge -------------------------------------------------
+
+// POST an operation acknowledge to EFM.  Body is deliberately minimal --
+// {operationId, operationState} only.  Including agentInfo/deviceInfo/flowInfo
+// makes EFM additionally process the ack as a heartbeat (its
+// containsAdditionalInfo path); the plain body keeps the ack side-effect-free
+// and EFM resolves the agent from the operation row itself.
+void post_operation_ack(const char* op_id, bool applied, const char* details) {
+    if (op_id == nullptr || op_id[0] == '\0') {
+        ESP_LOGW(TAG, "ack skipped: operation has no identifier");
+        return;
+    }
+
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "operationId", op_id);
+    cJSON* st = cJSON_CreateObject();
+    cJSON_AddStringToObject(st, "state", applied ? "FULLY_APPLIED" : "NOT_APPLIED");
+    if (details != nullptr && details[0] != '\0') {
+        cJSON_AddStringToObject(st, "details", details);
+    }
+    cJSON_AddItemToObject(root, "operationState", st);
+
+    char* body = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (body == nullptr) {
+        ESP_LOGE(TAG, "ack build: OOM");
+        return;
+    }
+
+    esp_http_client_config_t cfg = {};
+    cfg.url               = CONFIG_MICROFI_C2_ACK_URL;
+    cfg.method            = HTTP_METHOD_POST;
+    cfg.crt_bundle_attach = esp_crt_bundle_attach;
+    cfg.timeout_ms        = 10000;
+
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (client == nullptr) {
+        cJSON_free(body);
+        ESP_LOGE(TAG, "ack: esp_http_client_init failed");
+        return;
+    }
+    esp_http_client_set_header(client, "Content-Type", "application/json");
+    esp_http_client_set_post_field(client, body, std::strlen(body));
+
+    const esp_err_t err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ack POST failed: %s", esp_err_to_name(err));
+    } else {
+        const int status = esp_http_client_get_status_code(client);
+        ESP_LOGI(TAG, "ack op=%s state=%s -> HTTP %d",
+                 op_id, applied ? "FULLY_APPLIED" : "NOT_APPLIED", status);
+    }
+    esp_http_client_cleanup(client);
+    cJSON_free(body);
+}
+
 // ---- Response processor ----------------------------------------------------
 
 void process_response(const char* body, size_t /*len*/) {
@@ -560,11 +620,13 @@ void process_response(const char* body, size_t /*len*/) {
 
             if (config_url[0] == '\0') {
                 ESP_LOGE(TAG, "  -> could not resolve config URL; ignoring op");
+                post_operation_ack(id, false, "could not resolve flow config URL");
                 continue;
             }
 
             if (fetch_flow_config(config_url) != Status::Ok) {
                 ESP_LOGE(TAG, "  -> flow fetch failed");
+                post_operation_ack(id, false, "flow config fetch failed");
                 continue;
             }
             // Log full YAML in 400-char chunks so we can find the flow identifier field.
@@ -577,6 +639,10 @@ void process_response(const char* body, size_t /*len*/) {
             if (parse_rc != Status::Ok) {
                 ESP_LOGE(TAG, "  -> flow parse failed (%s); body[0..79]: %.80s",
                          to_string(parse_rc), s_flow_buf);
+                char details[64];
+                std::snprintf(details, sizeof(details),
+                              "flow parse failed: %s", to_string(parse_rc));
+                post_operation_ack(id, false, details);
                 continue;
             }
             ESP_LOGI(TAG, "  -> parsed %u node(s), %u conn(s)",
@@ -599,7 +665,15 @@ void process_response(const char* body, size_t /*len*/) {
                 }
             }
 
-            FlowEngine::instance().apply(def);
+            const Status apply_rc = FlowEngine::instance().apply(def);
+            if (apply_rc != Status::Ok) {
+                ESP_LOGE(TAG, "  -> engine apply rejected (%s)", to_string(apply_rc));
+                char details[64];
+                std::snprintf(details, sizeof(details),
+                              "engine apply rejected: %s", to_string(apply_rc));
+                post_operation_ack(id, false, details);
+                continue;
+            }
             s_dump_next_heartbeat = true;   // log the next heartbeat so we can inspect monitoring fields
             // Persist the raw flow def so it survives a power cycle.
             // Non-fatal: if the save fails we still apply the flow in RAM.
@@ -618,6 +692,7 @@ void process_response(const char* body, size_t /*len*/) {
                 }
             }
             ESP_LOGI(TAG, "  -> flow queued for apply (flow_id=%.36s)", def.flow_id);
+            post_operation_ack(id, true, "flow applied");
             continue;
         }
     }

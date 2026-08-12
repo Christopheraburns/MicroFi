@@ -26,9 +26,9 @@ config MICROFI_C2_ACK_URL
     string "EFM / C2 acknowledge URL"
     default "http://localhost:10090/efm/api/c2-protocol/acknowledge"
     help
-        Full URL where MicroFi POSTs operation acknowledgements. Not used by
-        the current slice (operations are logged, not acked) but the field
-        is configurable so the next slice can pick it up unchanged.
+        Full URL where MicroFi POSTs operation acknowledgements after an
+        UPDATE/configuration op is applied (FULLY_APPLIED) or fails
+        (NOT_APPLIED). Without the ack, EFM times the operation out to FAILED.
 
 config MICROFI_AGENT_CLASS
     string "Agent class"
