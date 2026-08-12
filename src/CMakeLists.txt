@@ -44,6 +44,7 @@ idf_component_register(
     "processors/get_gpio.cpp"
     "processors/listen_http.cpp"
     "processors/set_gpio.cpp"
+    "processors/capture_image.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
@@ -63,6 +64,7 @@ idf_component_register(
     littlefs
     driver
     esp_http_server
+    esp32-camera
   WHOLE_ARCHIVE
 )
 
