@@ -1,0 +1,10 @@
+# Per-device overlay for physical unit #3 (XIAO ESP32-S3 Sense,
+# MAC ac:27:6e:a8:4c:e0) -- EFM agent class MicroFi-3.
+# Applied last in the SDKCONFIG_DEFAULTS chain, so these override
+# sdkconfig.defaults' MicroFi/microfi_1 values.
+#
+# Agent id is left blank on purpose: agent_id.h derives
+# "microfi-<mac-hex>" from the eFuse MAC, unique per physical unit by
+# construction -- no fixed-id reuse across devices.
+CONFIG_MICROFI_AGENT_CLASS="MicroFi-3"
+CONFIG_MICROFI_AGENT_ID=""

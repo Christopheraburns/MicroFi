@@ -1,0 +1,26 @@
+# MicroFi partition table for 8 MB flash targets -- specifically the Seeed
+# XIAO ESP32-S3 Sense (GD25Q64 flash, JEDEC-verified 8 MB on all three
+# physical units, 2026-08-12 triage; the "found 2MB!" warning that motivated
+# partitions_2mb.csv was a misread -- see DesktopShare
+# efm-xiao-microfi-1-2-3.md, phase-1 triage).
+#
+# Same OTA-preserving shape as partitions.csv (16 MB), scaled down:
+#
+#   nvs               24 KB   key/value config (agent ID, calibration, etc.)
+#   otadata            8 KB   OTA slot pointer
+#   phy_init           4 KB   RF calibration data
+#   ota_0           2048 KB   application slot A
+#   ota_1           2048 KB   application slot B (for OTA rollback)
+#   littlefs       ~3.9 MB    FlowFile + Content repositories (durable queue)
+#
+# App headroom: current firmware is ~1.1 MB, so each 2 MB slot leaves ~0.9 MB
+# for new processors (native Sparkplug, camera) -- the ceiling that
+# partitions_2mb.csv imposed is gone.
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x6000,
+otadata,    data, ota,      0xf000,    0x2000,
+phy_init,   data, phy,      0x11000,   0x1000,
+ota_0,      app,  ota_0,    0x20000,   0x200000,
+ota_1,      app,  ota_1,    0x220000,  0x200000,
+littlefs,   data, littlefs, 0x420000,  0x3E0000,

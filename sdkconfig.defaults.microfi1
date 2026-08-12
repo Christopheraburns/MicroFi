@@ -1,0 +1,13 @@
+# Per-device overlay for physical unit #1 (XIAO ESP32-S3 Sense,
+# MAC e0:72:a1:fb:fd:04) -- EFM agent class MicroFi-1.
+# This unit was the original `MicroFi` class agent (fixed id "microfi_1",
+# 2MB partition layout); replaced 2026-08-12 per issue #134 once the 8MB
+# layout was validated on units #2/#3. The old class's flow was exported
+# to DesktopShare files/MicroFi-flow-export-2026-08-12.json before the
+# class was removed.
+#
+# Agent id is left blank on purpose: agent_id.h derives
+# "microfi-<mac-hex>" from the eFuse MAC, unique per physical unit by
+# construction -- the fixed "microfi_1" id retired with the old class.
+CONFIG_MICROFI_AGENT_CLASS="MicroFi-1"
+CONFIG_MICROFI_AGENT_ID=""
