@@ -158,6 +158,7 @@ ProcessorDescriptor descriptor = {
     "INPUT_REQUIRED", // sink: must have an incoming connection
     kProperties,
     kPropertyCount,
+    nullptr,          // on_stop -- no external resources
 };
 
 }  // namespace
