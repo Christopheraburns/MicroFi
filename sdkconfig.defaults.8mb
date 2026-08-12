@@ -8,3 +8,11 @@
 # "this XIAO has 2MB flash" myth (2026-07; corrected by JEDEC read
 # 2026-08-12, all units are 8 MB GD25Q64).
 CONFIG_ESPTOOLPY_FLASHSIZE_8MB=y
+
+# 8MB octal PSRAM (ESP32-S3R8 module on every XIAO ESP32-S3 Sense unit,
+# JEDEC-verified alongside the 8MB flash). Needed for esp32-camera frame
+# buffers (CAMERA_FB_IN_PSRAM); malloc integration is IDF's default, so
+# large transient allocations (mqtt outbox holding a JPEG) can spill here.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y

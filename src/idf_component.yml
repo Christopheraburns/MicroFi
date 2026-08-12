@@ -16,6 +16,10 @@ dependencies:
   ## component registry instead.
   espressif/mqtt: "*"
 
+  ## OV2640 camera driver for the XIAO ESP32-S3 Sense (CaptureImage
+  ## processor). Frame buffers land in PSRAM (CONFIG_SPIRAM, 8MB octal).
+  espressif/esp32-camera: "^2.0.0"
+
   ## Required by the IDF Component Manager itself.
   idf:
     version: ">=5.0"
