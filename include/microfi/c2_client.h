@@ -4,8 +4,9 @@
 // heartbeat POST that carries agent id, free heap, queue depth, and the
 // list of compiled-in processor names.
 //
-// Operation acknowledgement and flow-apply land in the next slice -- this
-// pass proves the TLS+HTTP path and the heartbeat JSON shape.
+// UPDATE/configuration operations are fetched, parsed, applied, and then
+// explicitly acknowledged via POST to CONFIG_MICROFI_C2_ACK_URL
+// (FULLY_APPLIED on success, NOT_APPLIED with details on failure).
 
 #pragma once
 

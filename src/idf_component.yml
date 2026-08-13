@@ -11,6 +11,15 @@ dependencies:
   ##   - the CONFIG_LITTLEFS_* Kconfig tree
   joltwallet/littlefs: "^1.14.0"
 
+  ## MQTT client (esp-mqtt). Provides mqtt_client.h / esp_mqtt_client_*.
+  ## No longer bundled in-tree as of ESP-IDF 6.x -- must come from the
+  ## component registry instead.
+  espressif/mqtt: "*"
+
+  ## OV2640 camera driver for the XIAO ESP32-S3 Sense (CaptureImage
+  ## processor). Frame buffers land in PSRAM (CONFIG_SPIRAM, 8MB octal).
+  espressif/esp32-camera: "^2.0.0"
+
   ## Required by the IDF Component Manager itself.
   idf:
     version: ">=5.0"

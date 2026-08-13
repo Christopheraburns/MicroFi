@@ -99,10 +99,20 @@ struct ProcessorDescriptor {
     // (manifest omits the propertyDescriptors key entirely, avoiding the
     // empty-object serialization bug in EFM's Java deserializer).
     //
-    // These fields are at the END of the struct so that existing aggregate
-    // initializers that don't mention them are zero-initialized safely.
+    // Late-added fields live at the END of the struct. Note the build runs
+    // -Werror=missing-field-initializers, so every descriptor still has to
+    // spell out each field explicitly (nullptr/0 when unused).
     const PropertyDescriptor* properties;
     size_t                    property_count;
+
+    // Optional teardown, called by the engine on each node of the OUTGOING
+    // graph before a flow rebuild overwrites its state slab (and never for
+    // nodes that were skipped at build time). Any processor that owns an
+    // external resource -- an httpd server, an MQTT client, a FreeRTOS
+    // queue -- must release it here, or a C2 republish orphans the old
+    // instance (port conflicts, duplicate MQTT client-id fights, leaked
+    // heap -- issue #150). Runs on the engine task. May be null.
+    void (*on_stop)(void* state);
 };
 
 }  // namespace microfi

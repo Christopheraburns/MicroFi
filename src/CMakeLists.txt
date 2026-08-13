@@ -39,6 +39,12 @@ idf_component_register(
     "main.cpp"
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
+    "processors/publish_mqtt.cpp"
+    "processors/update_attribute.cpp"
+    "processors/get_gpio.cpp"
+    "processors/listen_http.cpp"
+    "processors/set_gpio.cpp"
+    "processors/capture_image.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
@@ -50,11 +56,15 @@ idf_component_register(
     esp_netif
     nvs_flash
     esp_http_client
+    mqtt
     mbedtls
     esp-tls
     freertos
     log
     littlefs
+    driver
+    esp_http_server
+    esp32-camera
   WHOLE_ARCHIVE
 )
 

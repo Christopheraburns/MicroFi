@@ -35,8 +35,8 @@ Status Session::transfer(const FlowFile& f, const char* relationship) {
         if (std::strncmp(bindings_[i].name, relationship,
                          kMaxRelationshipNameLen) == 0) {
             const Status rc = bindings_[i].queue->try_push(f);
-            if (rc == Status::Ok) ++n_outputs_;
-            return rc;
+            if (rc != Status::Ok) return rc;
+            ++n_outputs_;
         }
     }
     // Unbound relationship is treated as "auto-terminate" -- not an error,
