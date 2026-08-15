@@ -32,6 +32,7 @@ idf_component_register(
     "agent_id.cpp"
     "manifest.cpp"
     "c2_client.cpp"
+    "liveness_led.cpp"
     "storage.cpp"
     "littlefs_repository.cpp"
     "flow_store.cpp"

@@ -53,6 +53,41 @@ config MICROFI_HEARTBEAT_INTERVAL_MS
         How often the C2 client POSTs a heartbeat. 30000 (30s) is a sane
         default for development; production fleets typically use 60000+.
 
+config MICROFI_LIVENESS_LED
+    bool "Agent liveness LED strobe"
+    default y
+    help
+        Blink an onboard LED for as long as the agent is running. Started
+        after all fatal-init gates, so a blinking LED means the agent
+        booted all the way (#171).
+
+if MICROFI_LIVENESS_LED
+
+config MICROFI_LIVENESS_LED_GPIO
+    int "Liveness LED GPIO"
+    default 21
+    range 0 48
+    help
+        Pin to strobe. 21 is the XIAO ESP32-S3 onboard user LED. Retarget
+        in a per-device sdkconfig overlay if a flow-level SetGPIO needs
+        that pin — there is no arbitration between the strobe task and a
+        flow writing the same pin.
+
+config MICROFI_LIVENESS_LED_ACTIVE_LOW
+    bool "Liveness LED is active-low"
+    default y
+    help
+        The XIAO ESP32-S3 user LED lights on logical 0.
+
+config MICROFI_LIVENESS_LED_PERIOD_MS
+    int "Strobe period (ms)"
+    default 1000
+    range 100 60000
+    help
+        Full on+off cycle length.
+
+endif
+
 endmenu
 
 menu "MicroFi storage"

@@ -13,6 +13,7 @@
 
 #include "microfi/agent_id.h"
 #include "microfi/c2_client.h"
+#include "microfi/liveness_led.h"
 #include "microfi/flow_def.h"
 #include "microfi/flow_engine.h"
 #include "microfi/flow_parser.h"
@@ -126,6 +127,14 @@ extern "C" void app_main(void) {
         ESP_LOGE(TAG, "c2 client failed to start: %s",
                  microfi::to_string(c2_rc));
         return;
+    }
+
+    // Liveness strobe last: past every fatal-init return above, so a blinking
+    // LED means the agent is genuinely up. Failure is a warn, never fatal.
+    const microfi::Status led_rc = microfi::liveness_led_start();
+    if (led_rc != microfi::Status::Ok) {
+        ESP_LOGW(TAG, "liveness LED failed to start: %s",
+                 microfi::to_string(led_rc));
     }
 
     ESP_LOGI(TAG, "boot complete; heartbeating to %s",
