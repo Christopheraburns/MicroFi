@@ -20,6 +20,11 @@ namespace microfi {
 
 namespace {
 
+// Gated like liveness_led_start()'s stub below: the MICROFI_LIVENESS_LED_*
+// pin/period symbols only exist in sdkconfig when the strobe is enabled
+// (they sit inside Kconfig's `if MICROFI_LIVENESS_LED`).
+#if CONFIG_MICROFI_LIVENESS_LED
+
 const char* TAG = "microfi.led";
 
 void strobe_task(void* /*arg*/) {
@@ -54,6 +59,8 @@ void strobe_task(void* /*arg*/) {
         vTaskDelay(half);
     }
 }
+
+#endif  // CONFIG_MICROFI_LIVENESS_LED
 
 }  // namespace
 
