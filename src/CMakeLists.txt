@@ -32,10 +32,12 @@ idf_component_register(
     "agent_id.cpp"
     "manifest.cpp"
     "c2_client.cpp"
+    "liveness_led.cpp"
     "storage.cpp"
     "littlefs_repository.cpp"
     "flow_store.cpp"
     "flowfile_store.cpp"
+    "agent.cpp"
     "main.cpp"
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
@@ -45,6 +47,7 @@ idf_component_register(
     "processors/listen_http.cpp"
     "processors/set_gpio.cpp"
     "processors/capture_image.cpp"
+    "processors/publish_sparkplug.cpp"
     ${MICROFI_CJSON_SRCS}
   INCLUDE_DIRS
     "."
@@ -65,6 +68,7 @@ idf_component_register(
     driver
     esp_http_server
     esp32-camera
+    sparkplug
   WHOLE_ARCHIVE
 )
 
