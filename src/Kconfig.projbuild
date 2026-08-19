@@ -1,5 +1,20 @@
 menu "MicroFi configuration"
 
+config MICROFI_WIFI_ADOPT_EXISTING
+    bool "Adopt the host firmware's WiFi instead of bringing up our own"
+    default n
+    help
+        For hosted builds (the agent as a component inside another firmware,
+        e.g. ESP-Brookesia on the AMOLED). The host owns NVS, the default
+        event loop, netif and the WiFi driver; unchanged the agent would
+        abort at esp_event_loop_create_default() (ESP_ERR_INVALID_STATE).
+        With this on, wifi_start_and_wait() performs no WiFi init at all:
+        it reads the current address off the host's "WIFI_STA_DEF" netif
+        and listens for IP_EVENT_STA_GOT_IP / WIFI_EVENT_STA_DISCONNECTED
+        to track link state. Reconnect policy stays the host's.
+        MICROFI_WIFI_SSID/PASSWORD are ignored. Keep this off (n) on the
+        XIAOs, where MicroFi owns the board.
+
 config MICROFI_WIFI_SSID
     string "WiFi SSID"
     default "<your-wifi-ssid>"

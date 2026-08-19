@@ -37,6 +37,7 @@ idf_component_register(
     "littlefs_repository.cpp"
     "flow_store.cpp"
     "flowfile_store.cpp"
+    "agent.cpp"
     "main.cpp"
     "processors/generate_flowfile.cpp"
     "processors/log_attribute.cpp"
