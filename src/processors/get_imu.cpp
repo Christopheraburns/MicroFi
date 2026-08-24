@@ -317,6 +317,14 @@ Status on_trigger(Session& session, void* state) {
     if (qmi8658_read_sensor_data(&s_imu_dev, &data) != ESP_OK) {
         return Status::Again;
     }
+    // The driver's non-m/s^2 mode reports milli-g (raw * 1000 / lsb_div,
+    // qmi8658.c read_sensor_data) -- scale to g here so the JSON, the
+    // imu.* attributes and Motion Threshold all speak the unit the
+    // property names promise. Measured before this scale: az = -1009 flat
+    // on the desk.
+    data.accelX /= 1000.0f;
+    data.accelY /= 1000.0f;
+    data.accelZ /= 1000.0f;
 
     if (s->motion_threshold_g > 0.0f) {
         const float mag = std::sqrt(data.accelX * data.accelX +
