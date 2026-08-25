@@ -90,6 +90,75 @@ bool wifi_connected() {
     return s_connected;
 }
 
+#if defined(CONFIG_MICROFI_WIFI_ADOPT_EXISTING)
+
+// Adopt-mode: the host firmware (e.g. ESP-Brookesia) owns NVS, the default
+// event loop, netif and the WiFi driver. We only observe: read the current
+// address off the host's STA netif, and track link state via events. No
+// esp_wifi_connect() here -- reconnect policy belongs to the host.
+namespace {
+
+void on_adopt_event(void* /*arg*/, esp_event_base_t base, int32_t id, void* data) {
+    if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        auto* ev = static_cast<ip_event_got_ip_t*>(data);
+        ESP_LOGI(TAG, "adopted wifi got ip: " IPSTR, IP2STR(&ev->ip_info.ip));
+        s_connected      = true;
+        s_ever_connected = true;
+        if (s_wifi_events != nullptr) {
+            xEventGroupSetBits(s_wifi_events, GOT_IP_BIT);
+        }
+    } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
+        ESP_LOGW(TAG, "adopted wifi disconnected; waiting for host to reconnect");
+        s_connected = false;
+    }
+}
+
+}  // namespace
+
+Status wifi_start_and_wait(uint32_t timeout_ms) {
+    s_wifi_events = xEventGroupCreate();
+    if (s_wifi_events == nullptr) return Status::OutOfMemory;
+
+    // The host normally created the default loop already; tolerate running
+    // first (create) and second (INVALID_STATE) alike.
+    const esp_err_t loop_rc = esp_event_loop_create_default();
+    if (loop_rc != ESP_OK && loop_rc != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "default event loop unavailable: %s", esp_err_to_name(loop_rc));
+        return Status::IoError;
+    }
+
+    esp_event_handler_instance_t inst_got_ip;
+    esp_event_handler_instance_t inst_disc;
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        IP_EVENT, IP_EVENT_STA_GOT_IP, &on_adopt_event, nullptr, &inst_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_adopt_event, nullptr, &inst_disc));
+
+    // Already connected before we registered? Read the address directly.
+    esp_netif_t* sta = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (sta != nullptr) {
+        esp_netif_ip_info_t ip{};
+        if (esp_netif_get_ip_info(sta, &ip) == ESP_OK && ip.ip.addr != 0) {
+            ESP_LOGI(TAG, "adopted wifi already up: " IPSTR, IP2STR(&ip.ip));
+            s_connected      = true;
+            s_ever_connected = true;
+            return Status::Ok;
+        }
+    }
+
+    ESP_LOGI(TAG, "adopt-mode: waiting up to %ums for host wifi",
+             static_cast<unsigned>(timeout_ms));
+    const EventBits_t bits = xEventGroupWaitBits(
+        s_wifi_events, GOT_IP_BIT, pdFALSE, pdFALSE, pdMS_TO_TICKS(timeout_ms));
+
+    if (bits & GOT_IP_BIT) return Status::Ok;
+    // Not an error state: the handlers stay registered, so wifi_connected()
+    // flips to true whenever the host's link comes up later.
+    return Status::IoError;  // timeout
+}
+
+#else  // !CONFIG_MICROFI_WIFI_ADOPT_EXISTING
+
 Status wifi_start_and_wait(uint32_t timeout_ms) {
     // NVS is required by the WiFi driver for calibration data.
     esp_err_t nvs = nvs_flash_init();
@@ -143,5 +212,7 @@ Status wifi_start_and_wait(uint32_t timeout_ms) {
     if (bits & FAIL_BIT)   return Status::IoError;
     return Status::IoError;   // timeout
 }
+
+#endif  // CONFIG_MICROFI_WIFI_ADOPT_EXISTING
 
 }  // namespace microfi
