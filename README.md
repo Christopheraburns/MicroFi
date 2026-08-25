@@ -13,7 +13,7 @@ Pre-alpha scope:
 - [x] Minimal flow engine (single-task scheduler, hard-wired graph).
 - [x] WiFi station bring-up.
 - [x] HTTPS heartbeat POST to a configurable C2 URL (mbedTLS via `esp_http_client`).
-- [x] Two embedded processors: `GenerateFlowFile`, `LogAttribute`.
+- [x] Nine embedded processors: `GenerateFlowFile`, `LogAttribute`, `UpdateAttribute`, `PublishMQTT`, `GetGPIO`, `SetGPIO`, `ListenHTTP`, `CaptureImage`, `PublishSparkplug` — see [`docs/Processor-Inventory-And-Roadmap.md`](docs/Processor-Inventory-And-Roadmap.md#shipped) for what each does and how it maps to the roadmap.
 - [x] Flow-definition parsing — NiFi versioned-flow-snapshot (JSON) with auto-detect fall-through to MiNiFi Config Version 3 (YAML).
 - [x] C2 operation dispatch — `DESCRIBE/manifest` re-send and `UPDATE/configuration` fetch + parse + engine apply, followed by an explicit acknowledge POST (`FULLY_APPLIED` / `NOT_APPLIED`) to `CONFIG_MICROFI_C2_ACK_URL`.
 - [x] Durable storage substrate — LittleFS mount, `IRepository` interface, `LittleFSRepository` with watermark eviction (DropOldest / BackPressure / FailWrites), storage metrics in the EFM heartbeat. Default partition layout in `partitions.csv` sizes for ~30 days offline.
