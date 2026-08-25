@@ -27,6 +27,27 @@
 
 ---
 
+## Part 0 — Shipped in MicroFi today {#shipped}
+
+**Nine processors on `main`**, as of the `feature/amoled-agent` merge (2026-08-25). Five are direct
+ports of upstream MiNiFi C++ processors (Part 1 below); one is the `GetGPIO` P0 row from Part 2's
+proposed table; three (`SetGPIO`, `CaptureImage`, `PublishSparkplug`) are MicroFi-original processors
+that don't appear in Part 2's original proposed set — real gaps in that roadmap this table now closes.
+
+| Processor          | Source                                       | Notes |
+| :------------------ | :------------------------------------------- | :---- |
+| `GenerateFlowFile`  | Part 1 (standard-processors), 🟢 Yes         | Fixed-content emitter; base sentinel. |
+| `LogAttribute`      | Part 1 (standard-processors), 🟢 Yes         | Diagnostic sink. |
+| `UpdateAttribute`   | Part 1 (standard-processors), 🟢 Yes         | Literal-value dynamic properties (not the full Expression Language subset Part 1 flagged as 🟡). |
+| `ListenHTTP`        | Part 1 (civetweb), 🟡 Partial                | Built exactly as predicted — `esp_http_server`, no CivetWeb dependency. Inbound HTTP ingress for MicroFi. |
+| `PublishMQTT`       | Part 1 (mqtt), 🟢 Yes                        | ESP-IDF native MQTT client, QoS/retain. |
+| `GetGPIO`           | Part 2 (Sensor I/O), **P0**                  | Digital input, edge/level/polled. |
+| `SetGPIO`           | *Not in Part 2* — MicroFi-original           | Write-side counterpart to `GetGPIO`; Part 2's proposed set only covered reads. |
+| `CaptureImage`      | Maps to Part 2's proposed `GetCamera` (P1, S3-only) | OV2640 JPEG capture for the XIAO Sense — implemented ahead of its P1 priority. |
+| `PublishSparkplug`  | *Not in Part 2* — MicroFi-original           | Sparkplug B NBIRTH/NDATA egress with full session semantics (bdSeq, per-message seq, rebirth) — unifies the standalone `xiao-telemetry-sparkplug` sketch into the MicroFi image. A production-grade egress option Part 2's "Egress / storage" category didn't anticipate alongside `PutMQTTBatch`. |
+
+---
+
 ## Part 1 — Apache MiNiFi C++ Processor Inventory (89 processors)
 
 ### Standard processors (`extensions/standard-processors`)
@@ -365,7 +386,8 @@ The P0 set (19 processors) plus the **23 directly portable MiNiFi processors** p
 ## Part 3 — Recommended build order
 
 **Wave 1 (foundations — already partly built, finish first):**
-UpdateAttribute, RouteOnAttribute, MergeContent (binary), PublishMQTT, InvokeHTTP, LogAttribute, GenerateFlowFile, EmitHeartbeat, GetESP32SystemMetrics.
+~~UpdateAttribute~~ ✅, RouteOnAttribute, MergeContent (binary), ~~PublishMQTT~~ ✅, InvokeHTTP, ~~LogAttribute~~ ✅, ~~GenerateFlowFile~~ ✅, EmitHeartbeat, GetESP32SystemMetrics.
+Shipped outside this wave's original scope: `GetGPIO`, `SetGPIO`, `CaptureImage`, `ListenHTTP`, `PublishSparkplug` — see [Part 0](#shipped).
 
 **Wave 2 (CSI minimum viable demo):**
 GetWiFiCSI, ExtractCSIAmplitudePhase, WindowCSI, DetectMotionCSI, AttachProvenance, AttachLabel, PutMQTTBatch.
