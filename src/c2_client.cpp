@@ -65,6 +65,7 @@ constexpr size_t kFlowBufBytes     = 16384;  // flow defs can be 5-10 KB
 char     s_resp_buf[kResponseBufBytes];
 size_t   s_resp_len           = 0;
 uint64_t s_heartbeat_counter  = 0;
+int64_t  s_last_hb_ok_us      = -1;     // esp_timer time of last successful POST
 bool     s_need_send_manifest = true;   // first heartbeat carries full manifest
 bool     s_dump_next_heartbeat = true;  // dump first heartbeat + one after each flow apply
 
@@ -771,6 +772,7 @@ Status post_heartbeat() {
         if (include_manifest) s_need_send_manifest = false;
         process_response(s_resp_buf, s_resp_len);
         ++s_heartbeat_counter;
+        s_last_hb_ok_us = esp_timer_get_time();
     }
     return rc;
 }
@@ -839,6 +841,18 @@ void warn_if_url_loopback() {
 
 const char* flow_config_json() { return s_flow_buf; }
 size_t      flow_config_len()  { return s_flow_len;  }
+
+// ---- Read-only status getters (additive, #185) ------------------------------
+// Diagnostics for host UIs (e.g. the Brookesia agent status tile). Racy reads
+// from other tasks are acceptable: these are metrics, not control.
+
+uint64_t c2_heartbeat_count() { return s_heartbeat_counter; }
+
+int64_t c2_last_heartbeat_age_ms() {
+    const int64_t t = s_last_hb_ok_us;
+    if (t < 0) return -1;
+    return (esp_timer_get_time() - t) / 1000;
+}
 
 Status c2_client_start() {
     warn_if_url_loopback();

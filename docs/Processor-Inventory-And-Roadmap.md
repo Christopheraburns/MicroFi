@@ -29,10 +29,19 @@
 
 ## Part 0 — Shipped in MicroFi today {#shipped}
 
-**Nine processors on `main`**, as of the `feature/amoled-agent` merge (2026-08-25). Five are direct
-ports of upstream MiNiFi C++ processors (Part 1 below); one is the `GetGPIO` P0 row from Part 2's
-proposed table; three (`SetGPIO`, `CaptureImage`, `PublishSparkplug`) are MicroFi-original processors
-that don't appear in Part 2's original proposed set — real gaps in that roadmap this table now closes.
+**Fourteen processors in the tree**, as of the AMOLED sensor-processor merge (#191 / #227, 2026-08-26).
+
+**Nine** compile into the standalone build (the XIAO / generic-ESP32 set): five are direct ports of
+upstream MiNiFi C++ processors (Part 1 below); one is the `GetGPIO` P0 row from Part 2's proposed
+table; three (`SetGPIO`, `CaptureImage`, `PublishSparkplug`) are MicroFi-original processors that
+don't appear in Part 2's original proposed set — real gaps in that roadmap this table now closes.
+
+The remaining **five** are the AMOLED sensor/HMI set (`GetIMU`, `GetTouch`, `CaptureAudio`,
+`PlayAudio`, `DisplayMessage`). Each is whole-file-guarded behind a `MICROFI_BOARD_*` define and is
+compiled only by the `waveshare-devices` overlay build for the AMOLED class — the per-board
+source-list selection first established by `CaptureImage` — so the standalone build stays at nine.
+They drive the first MicroFi host with a display, touch, IMU, and audio, and each goes through
+Brookesia's owned peripherals (shared I2C bus, audio services) rather than a second bus init.
 
 | Processor          | Source                                       | Notes |
 | :------------------ | :------------------------------------------- | :---- |
@@ -45,6 +54,11 @@ that don't appear in Part 2's original proposed set — real gaps in that roadma
 | `SetGPIO`           | *Not in Part 2* — MicroFi-original           | Write-side counterpart to `GetGPIO`; Part 2's proposed set only covered reads. |
 | `CaptureImage`      | Maps to Part 2's proposed `GetCamera` (P1, S3-only) | OV2640 JPEG capture for the XIAO Sense — implemented ahead of its P1 priority. |
 | `PublishSparkplug`  | *Not in Part 2* — MicroFi-original           | Sparkplug B NBIRTH/NDATA egress with full session semantics (bdSeq, per-message seq, rebirth) — unifies the standalone `xiao-telemetry-sparkplug` sketch into the MicroFi image. A production-grade egress option Part 2's "Egress / storage" category didn't anticipate alongside `PutMQTTBatch`. |
+| `GetIMU`            | Part 2 (Sensor I/O) `GetIMU`, **P0** — AMOLED-only | QMI8658 accel/gyro polled source over Brookesia's shared I2C bus. `Motion Threshold (g)` turns it into a shake/bump trigger — the first *event* from the glass. |
+| `GetTouch`          | *Not in Part 2* — MicroFi-original, AMOLED-only | Touch source; subscribes to Brookesia's gesture signal and emits a FlowFile per tap/swipe. HMI input Part 2's sensing-endpoint set never modeled. |
+| `CaptureAudio`      | Maps to Part 2's proposed `GetMicrophone` (P1) — AMOLED-only | ES8311 mic; taps Brookesia `AudioEncoder0` and records fixed-length WAV clips broker-direct over MQTT, plus a JSON meta FlowFile (seq/bytes/ms/rate) into the flow. |
+| `PlayAudio`         | *Not in Part 2* — MicroFi-original, AMOLED-only | Sink; plays FlowFile content through the speaker via Brookesia `AudioPlayback`. An audio-out actuator Part 2's ingest-only set didn't anticipate. |
+| `DisplayMessage`    | *Not in Part 2* — MicroFi-original, AMOLED-only | Sink; posts FlowFile content to the on-board display mailbox (rendered by the agent status tile) — the flow-controlled billboard, the first flow that answers back on the glass. |
 
 ---
 
@@ -387,7 +401,7 @@ The P0 set (19 processors) plus the **23 directly portable MiNiFi processors** p
 
 **Wave 1 (foundations — already partly built, finish first):**
 ~~UpdateAttribute~~ ✅, RouteOnAttribute, MergeContent (binary), ~~PublishMQTT~~ ✅, InvokeHTTP, ~~LogAttribute~~ ✅, ~~GenerateFlowFile~~ ✅, EmitHeartbeat, GetESP32SystemMetrics.
-Shipped outside this wave's original scope: `GetGPIO`, `SetGPIO`, `CaptureImage`, `ListenHTTP`, `PublishSparkplug` — see [Part 0](#shipped).
+Shipped outside this wave's original scope: `GetGPIO`, `SetGPIO`, `CaptureImage`, `ListenHTTP`, `PublishSparkplug`, and the AMOLED sensor/HMI set `GetIMU`, `GetTouch`, `CaptureAudio`, `PlayAudio`, `DisplayMessage` — see [Part 0](#shipped).
 
 **Wave 2 (CSI minimum viable demo):**
 GetWiFiCSI, ExtractCSIAmplitudePhase, WindowCSI, DetectMotionCSI, AttachProvenance, AttachLabel, PutMQTTBatch.
@@ -396,7 +410,7 @@ GetWiFiCSI, ExtractCSIAmplitudePhase, WindowCSI, DetectMotionCSI, AttachProvenan
 RunBistaticPair, SyncClockPTP, SiteToSiteLite, PublishFlowESPNow, EnforceOrder.
 
 **Wave 4 (sensor fusion + feature richness):**
-GetI2C, GetGPIO, GetIMU, FFTContent, WindowAggregate, ComputeDopplerSpectrum, RotateLittleFS.
+GetI2C, ~~GetGPIO~~ ✅, ~~GetIMU~~ ✅, FFTContent, WindowAggregate, ComputeDopplerSpectrum, RotateLittleFS.
 
 **Wave 5 (production polish):**
 QuantizeContent, NormalizeContent, AttachSchema, MonitorActivity, RunTFLiteMicro, PutHTTPBulk, GetCamera (S3 only).
