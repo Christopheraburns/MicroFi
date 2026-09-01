@@ -25,4 +25,12 @@ Status c2_client_start();
 const char* flow_config_json();
 size_t      flow_config_len();
 
+// Read-only status getters (additive, #185): diagnostics for host UIs such
+// as the Brookesia agent status tile. Racy reads are acceptable.
+//
+// Successful heartbeat POSTs since boot.
+uint64_t c2_heartbeat_count();
+// Milliseconds since the last successful heartbeat POST, or -1 if none yet.
+int64_t  c2_last_heartbeat_age_ms();
+
 }  // namespace microfi
