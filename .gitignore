@@ -19,6 +19,7 @@ sdkconfig.esp32s3-2mb
 sdkconfig.microfi1
 sdkconfig.microfi2
 sdkconfig.microfi3
+sdkconfig.amoled
 sdkconfig.esp32s3-4mb
 sdkconfig
 sdkconfig.old

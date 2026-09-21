@@ -1,0 +1,28 @@
+# Per-device overlay for the Waveshare ESP32-S3 Touch AMOLED board
+# (MAC 1c:db:d4:7b:85:84) -- EFM agent class AMOLED.
+# Applied last in the SDKCONFIG_DEFAULTS chain, so these override
+# sdkconfig.defaults' MicroFi/microfi_1 values.
+#
+# Agent id is left blank on purpose: agent_id.h derives
+# "microfi-<mac-hex>" from the eFuse MAC, unique per physical unit by
+# construction -- no fixed-id reuse across devices.
+CONFIG_MICROFI_AGENT_CLASS="AMOLED"
+CONFIG_MICROFI_AGENT_ID=""
+
+# 16 MB quad flash (esptool 2026-08-18: mfr 0x20 dev 0x4018, "quad (4 data
+# lines)" per eFuse). ESP-IDF defaults ESPTOOLPY_FLASHSIZE to 2MB when unset
+# (see sdkconfig.defaults.8mb's history) -- set it explicitly so
+# partitions.csv's 16 MB layout is valid on this env.
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# 8 MB embedded octal PSRAM (ESP32-S3 rev v0.2, "Embedded PSRAM 8MB (AP_3v3)"
+# per esptool chip features). Same three lines as the XIAO 8mb overlay.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+
+# Liveness LED strobe (#171) disabled on this board: the default GPIO21 is
+# safe on the XIAO (user LED) but its wiring on the Waveshare AMOLED family
+# is model-dependent and the exact SKU/schematic isn't confirmed yet.
+# Re-enable with a verified safe pin once the model is known.
+CONFIG_MICROFI_LIVENESS_LED=n
